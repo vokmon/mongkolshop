@@ -1,38 +1,10 @@
-const channelSecret = Deno.env.get("LINE_CHANNEL_SECRET")!
-const channelAccessToken = Deno.env.get("LINE_CHANNEL_ACCESS_TOKEN")!
-
-async function verifySignature(body: string, signature: string): Promise<boolean> {
-  const encoder = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(channelSecret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  )
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body))
-  const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
-  return expected === signature
-}
-
-async function replyMessage(replyToken: string, text: string): Promise<void> {
-  await fetch("https://api.line.me/v2/bot/message/reply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${channelAccessToken}`,
-    },
-    body: JSON.stringify({
-      replyToken,
-      messages: [{ type: "text", text }],
-    }),
-  })
-}
+import { verifySignature } from "../_shared/lineService.ts"
+import { getActiveSession, deactivateSession } from "../_shared/db/userSessions.ts"
+import { handleFollow } from "./handlers/follow.ts"
+import { handleMessage } from "./handlers/message.ts"
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 })
-  }
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 })
 
   const signature = req.headers.get("x-line-signature") ?? ""
   const body = await req.text()
@@ -42,14 +14,43 @@ Deno.serve(async (req) => {
   }
 
   const { events } = JSON.parse(body)
-
+  console.log(`📨 Webhook received: ${events.length} event(s)`)
   for (const event of events) {
-    if (event.type === "message" && event.message.type === "text") {
-      const userMessage = event.message.text
-      console.log("User said:", userMessage)
-      await replyMessage(event.replyToken, `คุณพิมพ์ว่า: ${userMessage}`)
+    try {
+      console.log(`🔔 Event: ${event.type} | user: ${event.source?.userId}`)
+      await handleEvent(event)
+    } catch (err) {
+      console.error(`❌ Unhandled error for event [${event.type}]:`, err)
     }
   }
 
   return new Response("OK", { status: 200 })
 })
+
+async function handleEvent(event: LineEvent): Promise<void> {
+  if (event.type === "follow") {
+    await handleFollow(event.replyToken)
+    return
+  }
+
+  if (event.type === "unfollow") {
+    const session = await getActiveSession(event.source.userId)
+    if (session) await deactivateSession(session.id, "user_unfollowed")
+    return
+  }
+
+  if (event.type === "message") {
+    const text = event.message.type === "text"
+      ? event.message.text
+      : `[ผู้ใช้ส่ง ${event.message.type}]`
+    await handleMessage(event.source.userId, event.replyToken, text)
+    return
+  }
+}
+
+interface LineEvent {
+  type: string
+  replyToken: string
+  source: { userId: string }
+  message: { type: string; text: string }
+}

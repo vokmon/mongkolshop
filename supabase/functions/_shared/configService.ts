@@ -1,0 +1,33 @@
+import { getAllPrompts } from "./db/prompts.ts"
+import { getActivePricing } from "./db/pricing.ts"
+import type { Pricing, Prompt } from "./types.ts"
+
+// In-memory cache — lives for the lifetime of the Edge Function instance
+let promptCache: Map<string, string> | null = null
+
+export async function getPrompt(key: string): Promise<string> {
+  if (!promptCache) {
+    const rows = await getAllPrompts()
+    promptCache = new Map(rows.map((p) => [p.prompt_key, p.content]))
+  }
+  const content = promptCache.get(key)
+  if (!content) throw new Error(`Prompt not found: ${key}`)
+  return content
+}
+
+export async function getPricing(): Promise<Pricing> {
+  // Not cached — stripe_price_id can be updated in DB without redeploying
+  const row = await getActivePricing()
+  if (!row) throw new Error("No active pricing found")
+  return row
+}
+
+/** Fill {{placeholder}} variables in a prompt template */
+export function fillPrompt(template: string, vars: Record<string, string | null | undefined>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "")
+}
+
+/** Force-clear prompt cache (useful after prompt updates in DB) */
+export function clearCache(): void {
+  promptCache = null
+}

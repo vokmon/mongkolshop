@@ -105,11 +105,10 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 LINE_CHANNEL_ACCESS_TOKEN=
 LINE_CHANNEL_SECRET=
+LINE_OA_URL=
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_ID=
-BASE_URL=
 ```
 
 `.env.local`, `.env.test`, `.env.production` are all gitignored. Only `.env.example` is committed.
