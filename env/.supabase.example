@@ -1,0 +1,6 @@
+# CLI credentials only — never deployed as function secrets
+# Copy to .supabase.dev and .supabase.prod and fill in values
+
+SUPABASE_ACCESS_TOKEN=
+SUPABASE_PROJECT_REF=
+SUPABASE_DB_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres

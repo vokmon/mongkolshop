@@ -1,0 +1,13 @@
+# Environment files
+env/.env.dev
+env/.env.prod
+env/.supabase.dev
+env/.supabase.prod
+
+# macOS
+.DS_Store
+
+# Swap files
+*.swp
+
+docs/images/*
