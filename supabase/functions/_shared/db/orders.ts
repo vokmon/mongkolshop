@@ -5,10 +5,11 @@ export async function createOrder(
   lineUserId: string,
   sessionId: number,
   orderNo: string,
+  packageKey: string,
 ): Promise<Order> {
   const { data, error } = await getClient()
     .from("orders")
-    .insert({ order_no: orderNo, line_user_id: lineUserId, session_id: sessionId })
+    .insert({ order_no: orderNo, line_user_id: lineUserId, session_id: sessionId, package_key: packageKey })
     .select()
     .single()
   if (error) throw error
@@ -39,6 +40,9 @@ export async function updateOrder(
     | "stripe_session_id"
     | "stripe_payment_id"
     | "checkout_url"
+    | "promotion_code"
+    | "coupon_name"
+    | "discount_amount"
     | "status"
     | "generated_content"
     | "image_url"
@@ -48,17 +52,39 @@ export async function updateOrder(
     | "generating_at"
     | "completed_at"
     | "delivered_at"
+    | "package_key"
   >>,
 ): Promise<void> {
   await getClient().from("orders").update(patch).eq("id", orderId)
 }
 
-export async function getStuckOrders(): Promise<Order[]> {
-  const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+export async function getStuckGeneratingOrders(): Promise<Order[]> {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString()
   const { data } = await getClient()
     .from("orders")
     .select("*")
     .eq("status", "generating")
     .lt("generating_at", cutoff)
+  return data ?? []
+}
+
+export async function getAbandonedPaidOrders(): Promise<Order[]> {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const { data } = await getClient()
+    .from("orders")
+    .select("*")
+    .eq("status", "paid")
+    .lt("paid_at", cutoff)
+  return data ?? []
+}
+
+export async function getUndeliveredOrders(): Promise<Order[]> {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+  const { data } = await getClient()
+    .from("orders")
+    .select("*")
+    .eq("status", "done")
+    .is("delivered_at", null)
+    .lt("completed_at", cutoff)
   return data ?? []
 }

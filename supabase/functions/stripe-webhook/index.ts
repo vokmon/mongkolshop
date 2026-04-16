@@ -2,6 +2,7 @@ import Stripe from "npm:stripe"
 import { createCheckoutSession } from "../_shared/checkoutService.ts"
 import { getOrderByOrderNo, updateOrder } from "../_shared/db/orders.ts"
 import { getSessionById } from "../_shared/db/userSessions.ts"
+import { invokeGenerationJob } from "../_shared/generationRouter.ts"
 import { paymentButtonMessage, pushMessages, pushText } from "../_shared/lineService.ts"
 import { getPricing } from "../_shared/configService.ts"
 
@@ -74,17 +75,43 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
     ? session.payment_intent
     : (session.payment_intent?.id ?? null)
 
+  // Extract discount info — only present if a promotion code was applied
+  const discountAmount = session.total_details?.amount_discount ?? 0
+  let promotionCode: string | null = null
+  let couponName: string | null = null
+
+  if (discountAmount > 0 && session.discounts?.length) {
+    const discount = session.discounts[0]
+    const coupon = typeof discount.coupon === "string"
+      ? await stripe.coupons.retrieve(discount.coupon)
+      : discount.coupon
+    couponName = coupon.name ?? null
+
+    if (discount.promotion_code) {
+      const promoId = typeof discount.promotion_code === "string"
+        ? discount.promotion_code
+        : discount.promotion_code.id
+      const promo = await stripe.promotionCodes.retrieve(promoId)
+      promotionCode = promo.code
+    }
+  }
+
   await updateOrder(order.id, {
     status: "paid",
     stripe_session_id: session.id,
     stripe_payment_id: paymentIntentId,
     paid_at: new Date().toISOString(),
+    ...(discountAmount > 0 && {
+      promotion_code: promotionCode,
+      coupon_name: couponName,
+      discount_amount: discountAmount,
+    }),
   })
 
-  console.log(`✅ Order ${orderNo} marked as paid — invoking generate-image`)
+  console.log(`✅ Order ${orderNo} marked as paid — invoking generation job`)
 
   // Fire-and-forget — do not await, return 200 to Stripe immediately
-  invokeGenerateImage(orderNo, lineUserId)
+  invokeGenerationJob(order)
 }
 
 async function handleCheckoutExpired(session: Stripe.Checkout.Session): Promise<void> {
@@ -134,21 +161,3 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session): Promise<
   ])
 }
 
-/** Fire-and-forget: invoke generate-image without blocking the Stripe response */
-function invokeGenerateImage(orderNo: string, lineUserId: string): void {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-
-  fetch(`${supabaseUrl}/functions/v1/generate-image`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${serviceRoleKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ order_no: orderNo, line_user_id: lineUserId }),
-  }).then((res) => {
-    console.log(`🖼️ generate-image invoked | status: ${res.status}`)
-  }).catch((err) => {
-    console.error("❌ Failed to invoke generate-image:", err)
-  })
-}

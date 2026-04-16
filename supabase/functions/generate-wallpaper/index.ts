@@ -8,9 +8,10 @@ import {
   updateSession,
 } from "../_shared/db/userSessions.ts";
 import { pushImageWithText, pushText } from "../_shared/lineService.ts";
+import { buildWallpaperDeliveryText } from "../_shared/products/wallpaper.ts";
 import type { WallpaperGeneratedContent } from "../_shared/types.ts";
 
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 5;
 const ai = new MockAIService();
 
 Deno.serve(async (req) => {
@@ -80,7 +81,7 @@ async function runGeneration(
     let deityKey = collected.deity_key;
     if (!deityKey) {
       console.log(`🔮 Recommending deity...`);
-      const deityPrompt = fillPrompt(await getPrompt("deity_recommendation"), {
+      const deityPrompt = fillPrompt(await getPrompt("wallpaper", "deity_recommendation"), {
         collected_data: JSON.stringify(collected, null, 2),
       });
       const recommendation = await ai.recommendDeity(deityPrompt);
@@ -91,14 +92,14 @@ async function runGeneration(
     // ── 5. Generate fortune content ───────────────────────────
     console.log(`📖 Generating fortune content...`);
     const collectedWithDeity = { ...collected, deity_key: deityKey };
-    const fortunePrompt = fillPrompt(await getPrompt("fortune_generation"), {
+    const fortunePrompt = fillPrompt(await getPrompt("wallpaper", "fortune_generation"), {
       collected_data: JSON.stringify(collectedWithDeity, null, 2),
     });
     const fortuneContent = await ai.generateContent(fortunePrompt);
 
     // ── 6. Generate image prompt ──────────────────────────────
     console.log(`✍️ Generating image prompt...`);
-    const imagePromptTemplate = fillPrompt(await getPrompt("image_generation"), {
+    const imagePromptTemplate = fillPrompt(await getPrompt("wallpaper", "image_generation"), {
       collected_data: JSON.stringify(collectedWithDeity, null, 2),
       fortune_data: JSON.stringify(fortuneContent, null, 2),
     });
@@ -122,12 +123,7 @@ async function runGeneration(
       worship_guide: fortuneContent.worship_guide,
       lucky_colors: fortuneContent.lucky_colors,
     };
-    const deliveryText =
-      `✨ รูปมงคลของคุณมาแล้วค่ะ!\n\n` +
-      `🙏 ${fortuneContent.fortune_text}\n\n` +
-      `📿 คาถา: ${fortuneContent.mantra}\n` +
-      `💡 ความหมาย: ${fortuneContent.mantra_meaning}\n\n` +
-      `🎨 สีมงคล: ${fortuneContent.lucky_colors}`;
+    const deliveryText = buildWallpaperDeliveryText(fortuneContent);
 
     await Promise.all([
       updateOrder(order.id, {

@@ -60,10 +60,16 @@ export interface Order {
   stripe_session_id: string | null
   stripe_payment_id: string | null
   checkout_url: string | null
+  promotion_code: string | null
+  coupon_name: string | null
+  discount_amount: number | null
 
   // Generated content — stored as JSONB, cast to product-specific type (e.g. WallpaperGeneratedContent)
   generated_content: Record<string, unknown> | null
   image_url: string | null
+
+  // Product
+  package_key: string
 
   // Lifecycle
   status: OrderStatus
@@ -83,6 +89,7 @@ export interface Order {
 
 export interface Prompt {
   id: number
+  package_key: string
   prompt_key: string
   content: string
   created_at: string

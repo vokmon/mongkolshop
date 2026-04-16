@@ -21,7 +21,7 @@ export async function handleConsentFlow(userId: string, replyToken: string, text
   }
 
   console.log(`⏳ Awaiting consent from ${userId} — re-showing privacy policy`)
-  const privacyPolicy = await getPrompt("privacy_policy")
+  const privacyPolicy = await getPrompt("shared", "privacy_policy")
   await replyMessages(replyToken, [
     { type: "text", text: privacyPolicy },
     quickReply("กรุณายืนยันการยอมรับนโยบายก่อนนะคะ 🙏", [

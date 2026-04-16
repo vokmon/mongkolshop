@@ -3,15 +3,16 @@ import { getActivePricingByKey } from "./db/pricing.ts"
 import type { Pricing, Prompt } from "./types.ts"
 
 // In-memory cache — lives for the lifetime of the Edge Function instance
+// Cache key: "{package_key}:{prompt_key}"
 let promptCache: Map<string, string> | null = null
 
-export async function getPrompt(key: string): Promise<string> {
+export async function getPrompt(packageKey: string, key: string): Promise<string> {
   if (!promptCache) {
     const rows = await getAllPrompts()
-    promptCache = new Map(rows.map((p) => [p.prompt_key, p.content]))
+    promptCache = new Map(rows.map((p) => [`${p.package_key}:${p.prompt_key}`, p.content]))
   }
-  const content = promptCache.get(key)
-  if (!content) throw new Error(`Prompt not found: ${key}`)
+  const content = promptCache.get(`${packageKey}:${key}`)
+  if (!content) throw new Error(`Prompt not found: ${packageKey}:${key}`)
   return content
 }
 

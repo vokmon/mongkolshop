@@ -3,7 +3,7 @@ import { quickReply, quickReplyItem, replyMessages } from "../../_shared/lineSer
 
 export async function handleFollow(replyToken: string): Promise<void> {
   console.log("👋 New follower — sending privacy policy")
-  const privacyPolicy = await getPrompt("privacy_policy")
+  const privacyPolicy = await getPrompt("shared", "privacy_policy")
   await replyMessages(replyToken, [
     {
       type: "text",

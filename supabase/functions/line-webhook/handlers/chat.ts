@@ -69,7 +69,7 @@ export async function handleChat(
   const missing = getMissingFields(collected);
   console.log(`🤖 Calling AI | session: ${session.id} | missing: [${missing.join(", ") || "none"}]`)
 
-  const systemPrompt = fillPrompt(await getPrompt("bot_personality"), {
+  const systemPrompt = fillPrompt(await getPrompt("wallpaper", "bot_personality"), {
     off_topic_count: String(session.off_topic_count),
     current_data: formatCollectedData(collected),
     missing_fields: missing.join(", "),
@@ -149,7 +149,7 @@ export async function handleChat(
       pricing.stripe_price_id,
     )
 
-    const order = await createOrder(userId, session.id, orderNo)
+    const order = await createOrder(userId, session.id, orderNo, session.package_key)
     await updateOrder(order.id, { stripe_session_id: stripeSessionId, checkout_url: checkoutUrl })
     await updateSession(session.id, { step: 7, current_order_no: orderNo })
     console.log(`📦 Order created: ${orderNo} | Stripe checkout sent`)
