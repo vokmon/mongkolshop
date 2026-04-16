@@ -5,6 +5,7 @@
 export interface UserConsent {
   id: number
   line_user_id: string
+  display_name: string | null
   accepted: boolean
   accepted_at: string | null
   withdrawn: boolean
@@ -61,7 +62,6 @@ export interface Order {
   stripe_payment_id: string | null
   checkout_url: string | null
   promotion_code: string | null
-  coupon_name: string | null
   discount_amount: number | null
 
   // Generated content — stored as JSONB, cast to product-specific type (e.g. WallpaperGeneratedContent)

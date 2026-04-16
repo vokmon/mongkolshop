@@ -78,21 +78,19 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
   // Extract discount info — only present if a promotion code was applied
   const discountAmount = session.total_details?.amount_discount ?? 0
   let promotionCode: string | null = null
-  let couponName: string | null = null
 
   if (discountAmount > 0 && session.discounts?.length) {
-    const discount = session.discounts[0]
-    const coupon = typeof discount.coupon === "string"
-      ? await stripe.coupons.retrieve(discount.coupon)
-      : discount.coupon
-    couponName = coupon.name ?? null
-
-    if (discount.promotion_code) {
-      const promoId = typeof discount.promotion_code === "string"
-        ? discount.promotion_code
-        : discount.promotion_code.id
-      const promo = await stripe.promotionCodes.retrieve(promoId)
-      promotionCode = promo.code
+    try {
+      const discount = session.discounts[0]
+      if (discount.promotion_code) {
+        const promoId = typeof discount.promotion_code === "string"
+          ? discount.promotion_code
+          : discount.promotion_code.id
+        const promo = await stripe.promotionCodes.retrieve(promoId)
+        promotionCode = promo.code
+      }
+    } catch (err) {
+      console.error("⚠️ Failed to extract discount info — continuing without it:", err)
     }
   }
 
@@ -103,7 +101,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
     paid_at: new Date().toISOString(),
     ...(discountAmount > 0 && {
       promotion_code: promotionCode,
-      coupon_name: couponName,
       discount_amount: discountAmount,
     }),
   })

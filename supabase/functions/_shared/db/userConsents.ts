@@ -10,11 +10,12 @@ export async function getConsent(lineUserId: string): Promise<UserConsent | null
   return data
 }
 
-export async function upsertConsent(lineUserId: string, accepted: boolean): Promise<void> {
+export async function upsertConsent(lineUserId: string, accepted: boolean, displayName?: string | null): Promise<void> {
   const now = new Date().toISOString()
   await getClient().from("user_consents").upsert(
     {
       line_user_id: lineUserId,
+      ...(displayName !== undefined && { display_name: displayName }),
       accepted,
       accepted_at: accepted ? now : null,
       withdrawn: !accepted,

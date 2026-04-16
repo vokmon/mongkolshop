@@ -41,7 +41,6 @@ export async function updateOrder(
     | "stripe_payment_id"
     | "checkout_url"
     | "promotion_code"
-    | "coupon_name"
     | "discount_amount"
     | "status"
     | "generated_content"

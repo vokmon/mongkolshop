@@ -6,8 +6,8 @@ import { createSession } from "../../_shared/db/userSessions.ts"
 export async function handleConsentFlow(userId: string, replyToken: string, text: string): Promise<void> {
   if (text.trim().includes("ยอมรับ") && !text.trim().includes("ไม่ยอมรับ")) {
     console.log(`✅ Consent accepted by ${userId}`)
-    await upsertConsent(userId, true)
     const profile = await getUserProfile(userId)
+    await upsertConsent(userId, true, profile?.displayName ?? null)
     await createSession(userId, profile?.displayName ?? null)
     await replyText(replyToken, "ขอบคุณที่ยอมรับนโยบายค่ะ 🙏 เริ่มต้นได้เลย! น้องมงคลพร้อมช่วยสร้างรูปมงคลให้คุณค่ะ ✨")
     return
