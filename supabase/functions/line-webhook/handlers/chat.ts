@@ -91,7 +91,8 @@ export async function handleChat(
   }
 
   // Build session patch — merge extracted fields into collected_data JSONB
-  const patch: Partial<UserSession> = {};
+  // Reset last_reminded_at so the 2h reminder cooldown restarts from this message
+  const patch: Partial<UserSession> = { last_reminded_at: null };
   const ex = botResponse.extracted;
   const extractedFields = extractedToCollected(ex)
   if (Object.keys(extractedFields).length > 0) {

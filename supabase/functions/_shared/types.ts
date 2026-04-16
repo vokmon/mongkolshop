@@ -76,9 +76,6 @@ export interface Order {
   generate_attempts: number
   last_error: string | null
 
-  // PDPA
-  data_anonymized_at: string | null
-
   // Timestamps
   created_at: string
   paid_at: string | null

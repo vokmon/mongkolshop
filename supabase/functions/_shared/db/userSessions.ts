@@ -64,16 +64,27 @@ export async function deactivateSession(sessionId: number, reason?: string): Pro
   })
 }
 
-export async function getSessionsForReminder(): Promise<UserSession[]> {
-  // Active sessions at steps 1–6 (collecting data) that haven't been reminded recently
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+export async function getGhostSessions(days: number): Promise<UserSession[]> {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("is_active", true)
-    .gte("step", 1)
-    .lte("step", 6)
-    .or(`last_reminded_at.is.null,last_reminded_at.lt.${oneHourAgo}`)
+    .lt("created_at", cutoff)
+  return data ?? []
+}
+
+export async function getSessionsForReminder(inactiveHours: number): Promise<UserSession[]> {
+  // Active sessions that haven't completed data collection (no order yet)
+  // Include reminder_count = 3 so we can deactivate those on this run
+  const cutoff = new Date(Date.now() - inactiveHours * 60 * 60 * 1000).toISOString()
+  const { data } = await getClient()
+    .from("user_sessions")
+    .select("*")
+    .eq("is_active", true)
+    .is("current_order_no", null)
+    .lte("reminder_count", 3)
+    .or(`last_reminded_at.is.null,last_reminded_at.lt.${cutoff}`)
   return data ?? []
 }
 
