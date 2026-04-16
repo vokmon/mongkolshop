@@ -1,4 +1,4 @@
-import type { CollectedData, UserSession } from "../../_shared/types.ts"
+import type { UserSession, WallpaperCollectedData } from "../../_shared/types.ts"
 
 export function buildStatusMessage(session: UserSession): string {
   const stepLabel = session.step <= 6
@@ -19,15 +19,16 @@ export function buildHelpMessage(): string {
 }
 
 export function buildMyDataMessage(session: UserSession): string {
+  const d = session.collected_data as Partial<WallpaperCollectedData>
   return "ข้อมูลของคุณที่เก็บไว้:\n\n" +
-    `👤 ชื่อ: ${session.full_name ?? "-"}\n` +
-    `🎂 วันเกิด: ${session.birthdate ?? "-"}\n` +
-    `🙏 ความปรารถนา: ${session.wish ?? "-"}\n` +
-    `✨ เทพ: ${session.deity_key ?? "-"}\n` +
-    `🎨 สี: ${session.color ?? "-"}`
+    `👤 ชื่อ: ${d.full_name ?? "-"}\n` +
+    `🎂 วันเกิด: ${d.birthdate ?? "-"}\n` +
+    `🙏 ความปรารถนา: ${d.wish ?? "-"}\n` +
+    `✨ เทพ: ${d.deity_key ?? "-"}\n` +
+    `🎨 สี: ${d.color ?? "-"}`
 }
 
-export function formatCollectedData(data: CollectedData): string {
+export function formatCollectedData(data: WallpaperCollectedData): string {
   const lines: string[] = []
   if (data.full_name) lines.push(`ชื่อ: ${data.full_name}`)
   if (data.birthdate) lines.push(`วันเกิด: ${data.birthdate}`)

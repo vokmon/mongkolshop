@@ -96,6 +96,25 @@ export async function pushImageWithText(
 }
 
 // ============================================================
+// Button template
+// ============================================================
+
+/** A card message with a single tappable button that opens a URL. */
+export function paymentButtonMessage(text: string, checkoutUrl: string): LineMessage {
+  return {
+    type: "template",
+    altText: text,
+    template: {
+      type: "buttons",
+      text,
+      actions: [
+        { type: "uri", label: "💳 ชำระเงินเลย", uri: checkoutUrl },
+      ],
+    },
+  }
+}
+
+// ============================================================
 // Quick reply helper
 // ============================================================
 
@@ -146,6 +165,12 @@ export async function getUserProfile(lineUserId: string): Promise<{ displayName:
 export interface LineMessage {
   type: string
   text?: string
+  altText?: string
+  template?: {
+    type: string
+    text?: string
+    actions?: { type: string; label: string; uri?: string; text?: string }[]
+  }
   originalContentUrl?: string
   previewImageUrl?: string
   quickReply?: { items: QuickReplyItem[] }

@@ -1,5 +1,5 @@
 import { getClient } from "./client.ts"
-import type { CollectedData, UserSession } from "../types.ts"
+import type { UserSession, WallpaperCollectedData } from "../types.ts"
 
 export async function getActiveSession(lineUserId: string): Promise<UserSession | null> {
   const { data } = await getClient()
@@ -11,10 +11,14 @@ export async function getActiveSession(lineUserId: string): Promise<UserSession 
   return data
 }
 
-export async function createSession(lineUserId: string, displayName: string | null): Promise<UserSession> {
+export async function createSession(
+  lineUserId: string,
+  displayName: string | null,
+  packageKey = "wallpaper",
+): Promise<UserSession> {
   const { data, error } = await getClient()
     .from("user_sessions")
-    .insert({ line_user_id: lineUserId, display_name: displayName })
+    .insert({ line_user_id: lineUserId, display_name: displayName, package_key: packageKey })
     .select()
     .single()
   if (error) throw error
@@ -25,18 +29,14 @@ export async function updateSession(
   sessionId: number,
   patch: Partial<Pick<UserSession,
     | "step"
-    | "full_name"
-    | "birthdate"
-    | "wish"
-    | "deity_key"
-    | "deity_source"
-    | "color"
+    | "collected_data"
     | "conversation_history"
     | "current_order_no"
     | "reminder_count"
     | "last_reminded_at"
     | "abandoned_reason"
     | "abandoned_at"
+    | "package_key"
     | "off_topic_count"
     | "chat_mode"
     | "is_active"
@@ -78,17 +78,19 @@ export function generateOrderNo(): string {
   return `MK-${date}-${rand}`
 }
 
-export function sessionToCollectedData(session: UserSession): CollectedData {
+export function sessionToCollectedData(session: UserSession): WallpaperCollectedData {
+  const d = session.collected_data as Partial<WallpaperCollectedData>
   return {
-    full_name: session.full_name,
-    birthdate: session.birthdate,
-    wish: session.wish,
-    deity_key: session.deity_key,
-    color: session.color,
+    full_name: d.full_name ?? null,
+    birthdate: d.birthdate ?? null,
+    wish: d.wish ?? null,
+    deity_key: d.deity_key ?? null,
+    deity_source: d.deity_source ?? null,
+    color: d.color ?? null,
   }
 }
 
-export function getMissingFields(data: CollectedData): string[] {
+export function getMissingFields(data: WallpaperCollectedData): string[] {
   const missing: string[] = []
   if (!data.full_name) missing.push("full_name")
   if (!data.birthdate) missing.push("birthdate")

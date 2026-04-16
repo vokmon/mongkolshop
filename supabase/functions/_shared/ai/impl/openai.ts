@@ -1,40 +1,57 @@
+import OpenAI from "npm:openai"
 import type { BotResponse, ChatMessage, DeityRecommendation, GeneratedContent } from "../../types.ts"
 import type { IAiService } from "../aiService.ts"
 
+const DEFAULT_CHAT_MODEL = "gpt-4o"
+const WEB_SEARCH_MODEL = "gpt-4o-search-preview"
+const IMAGE_MODEL = "dall-e-3"
+const IMAGE_SIZE = "1024x1792" as const
+const IMAGE_QUALITY = "hd" as const
+
 export class OpenAIService implements IAiService {
-  private readonly apiUrl = "https://api.openai.com/v1"
-  private readonly apiKey: string
+  private readonly client: OpenAI
 
   constructor() {
-    this.apiKey = Deno.env.get("OPENAI_API_KEY")!
+    this.client = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! })
   }
 
-  private authHeaders() {
-    return {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${this.apiKey}`,
-    }
-  }
-
+  /**
+   * Core chat completion wrapper.
+   *
+   * Options:
+   * - `model`          — defaults to "gpt-4o"
+   * - `responseFormat` — "json" adds response_format: json_object (cannot be combined with webSearch)
+   * - `webSearch`      — uses gpt-4o-search-preview + web_search_preview tool; returns plain text only
+   */
   private async chatCompletion(
-    messages: ChatMessage[],
-    options: { model?: string; responseFormat?: "json" } = {},
+    messages: OpenAI.Chat.ChatCompletionMessageParam[],
+    options: {
+      model?: string
+      responseFormat?: "json"
+      webSearch?: boolean
+    } = {},
   ): Promise<string> {
-    const res = await fetch(`${this.apiUrl}/chat/completions`, {
-      method: "POST",
-      headers: this.authHeaders(),
-      body: JSON.stringify({
-        model: options.model ?? "gpt-4o",
-        messages,
-        ...(options.responseFormat === "json" ? { response_format: { type: "json_object" } } : {}),
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`OpenAI chat error ${res.status}: ${err}`)
+    if (options.webSearch && options.responseFormat === "json") {
+      throw new Error("webSearch and responseFormat:json cannot be used together (OpenAI limitation)")
     }
-    const data = await res.json()
-    return data.choices[0].message.content as string
+
+    const model = options.webSearch
+      ? WEB_SEARCH_MODEL
+      : (options.model ?? DEFAULT_CHAT_MODEL)
+
+    const response = await this.client.chat.completions.create({
+      model,
+      messages,
+      ...(options.responseFormat === "json"
+        ? { response_format: { type: "json_object" } }
+        : {}),
+      ...(options.webSearch
+        // deno-lint-ignore no-explicit-any
+        ? { tools: [{ type: "web_search_preview" } as any] }
+        : {}),
+    })
+
+    return response.choices[0].message.content ?? ""
   }
 
   async chatWithBot(
@@ -42,7 +59,7 @@ export class OpenAIService implements IAiService {
     history: ChatMessage[],
     userMessage: string,
   ): Promise<BotResponse> {
-    const messages: ChatMessage[] = [
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
       ...history,
       { role: "user", content: userMessage },
@@ -51,8 +68,16 @@ export class OpenAIService implements IAiService {
     return JSON.parse(raw) as BotResponse
   }
 
+  /**
+   * Generate a DALL-E image prompt from a filled prompt template.
+   * Web search is enabled so the model can look up deity iconography,
+   * sacred colors, and symbol details before writing the prompt.
+   */
   async generateImagePrompt(filledPrompt: string): Promise<string> {
-    return await this.chatCompletion([{ role: "user", content: filledPrompt }])
+    return await this.chatCompletion(
+      [{ role: "user", content: filledPrompt }],
+      { webSearch: true },
+    )
   }
 
   async generateContent(filledPrompt: string): Promise<GeneratedContent> {
@@ -72,24 +97,15 @@ export class OpenAIService implements IAiService {
   }
 
   async createImage(prompt: string): Promise<Uint8Array> {
-    const genRes = await fetch(`${this.apiUrl}/images/generations`, {
-      method: "POST",
-      headers: this.authHeaders(),
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt,
-        n: 1,
-        size: "1024x1792",
-        quality: "hd",
-      }),
+    const response = await this.client.images.generate({
+      model: IMAGE_MODEL,
+      prompt,
+      n: 1,
+      size: IMAGE_SIZE,
+      quality: IMAGE_QUALITY,
     })
-    if (!genRes.ok) {
-      const err = await genRes.text()
-      throw new Error(`DALL-E error ${genRes.status}: ${err}`)
-    }
-    const data = await genRes.json()
-    const tempUrl = data.data[0].url as string
 
+    const tempUrl = response.data[0].url!
     const imgRes = await fetch(tempUrl)
     if (!imgRes.ok) throw new Error(`Failed to download image from DALL-E URL`)
     const buffer = await imgRes.arrayBuffer()

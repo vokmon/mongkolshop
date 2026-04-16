@@ -1,5 +1,5 @@
 import { getAllPrompts } from "./db/prompts.ts"
-import { getActivePricing } from "./db/pricing.ts"
+import { getActivePricingByKey } from "./db/pricing.ts"
 import type { Pricing, Prompt } from "./types.ts"
 
 // In-memory cache — lives for the lifetime of the Edge Function instance
@@ -15,10 +15,10 @@ export async function getPrompt(key: string): Promise<string> {
   return content
 }
 
-export async function getPricing(): Promise<Pricing> {
+export async function getPricing(packageKey: string): Promise<Pricing> {
   // Not cached — stripe_price_id can be updated in DB without redeploying
-  const row = await getActivePricing()
-  if (!row) throw new Error("No active pricing found")
+  const row = await getActivePricingByKey(packageKey)
+  if (!row) throw new Error(`No active pricing found for package: ${packageKey}`)
   return row
 }
 

@@ -21,13 +21,8 @@ export interface UserSession {
   step: number
   is_active: boolean
 
-  // Collected fields
-  full_name: string | null
-  birthdate: string | null   // ISO date string YYYY-MM-DD
-  wish: string | null
-  deity_key: string | null
-  deity_source: "auto" | "user" | null
-  color: string | null
+  // Collected fields — stored as JSONB, cast to product-specific type (e.g. WallpaperCollectedData)
+  collected_data: Record<string, unknown>
 
   // Conversation
   conversation_history: ChatMessage[]
@@ -40,6 +35,9 @@ export interface UserSession {
   // Abandonment
   abandoned_reason: string | null
   abandoned_at: string | null
+
+  // Product
+  package_key: string
 
   // Off-topic tracking
   off_topic_count: number
@@ -61,15 +59,11 @@ export interface Order {
   // Stripe
   stripe_session_id: string | null
   stripe_payment_id: string | null
+  checkout_url: string | null
 
-  // Generated content
-  image_prompt: string | null
+  // Generated content — stored as JSONB, cast to product-specific type (e.g. WallpaperGeneratedContent)
+  generated_content: Record<string, unknown> | null
   image_url: string | null
-  fortune_text: string | null
-  mantra: string | null
-  mantra_meaning: string | null
-  worship_guide: string | null
-  lucky_colors: string | null
 
   // Lifecycle
   status: OrderStatus
@@ -144,11 +138,24 @@ export interface DeityRecommendation {
   reason: string
 }
 
-// Data fields collected during conversation
-export interface CollectedData {
+// ============================================================
+// Wallpaper product — collected + generated types
+// ============================================================
+
+export interface WallpaperCollectedData {
   full_name: string | null
   birthdate: string | null
   wish: string | null
   deity_key: string | null
+  deity_source: "auto" | "user" | null
   color: string | null
+}
+
+export interface WallpaperGeneratedContent {
+  image_prompt: string
+  fortune_text: string
+  mantra: string
+  mantra_meaning: string
+  worship_guide: string
+  lucky_colors: string
 }

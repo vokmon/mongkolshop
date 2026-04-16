@@ -46,11 +46,22 @@ supabase/
     stuck-order-check/ # Cron (every 5min): detect orders stuck in "generating"
     cleanup-sessions/ # Cron (02:00 daily): archive history, delete ghost sessions
     _shared/
-      types.ts        # TypeScript interfaces for all DB tables and GPT responses
-      lineService.ts  # LINE reply/push/quickReply helpers
-      supabaseService.ts # All DB read/write operations
-      configService.ts   # Loads prompts + pricing from DB (with caching)
-      openaiService.ts   # chatWithBot(), generateContent(), createImage()
+      types.ts        # TypeScript interfaces — DB tables, GPT responses, product-specific data types
+      lineService.ts  # LINE reply/push/quickReply/paymentButton helpers
+      configService.ts   # Loads prompts + pricing from DB (prompts cached, pricing not)
+      ai/
+        aiService.ts  # IAiService interface
+        impl/
+          openai.ts   # OpenAIService (uses npm:openai, web search on generateImagePrompt)
+          mock.ts     # MockAIService for testing without OpenAI key
+      db/
+        client.ts     # Supabase client factory
+        userConsents.ts
+        userSessions.ts  # getActiveSession, createSession, updateSession, sessionToCollectedData
+        orders.ts        # createOrder, updateOrder, getStuckOrders
+        pricing.ts       # getActivePricingByKey(packageKey)
+        prompts.ts
+        storage.ts       # uploadImage → Supabase Storage
   migrations/
     001_schema.sql    # All table definitions
     002_seed.sql      # Initial prompts + pricing data
@@ -85,10 +96,16 @@ docs/                 # Planning documents (read-only reference)
 | Table | Purpose |
 |---|---|
 | `user_consents` | PDPA — one row per LINE user, tracks acceptance/withdrawal |
-| `user_sessions` | Conversation state — step (0–8), extracted fields, history, off_topic_count |
-| `orders` | Payment + generation lifecycle — status: pending→paid→generating→done\|failed |
+| `user_sessions` | Conversation state — step (0–8), `collected_data` JSONB, history, off_topic_count, package_key |
+| `orders` | Payment + generation lifecycle — `generated_content` JSONB, `image_url`, status: pending→paid→generating→done\|failed |
 | `prompts` | All AI prompt templates stored in DB (editable without redeploy) |
-| `pricing` | Package config — price 159 THB, stripe_price_id |
+| `pricing` | Package config per `package_key` — price, stripe_price_id |
+
+### Multi-product Design
+- `user_sessions.collected_data` — JSONB, cast to product-specific type in TypeScript (e.g. `WallpaperCollectedData`)
+- `orders.generated_content` — JSONB, cast to product-specific type (e.g. `WallpaperGeneratedContent`)
+- `user_sessions.package_key` — defaults to `"wallpaper"`, determines which pricing row to use
+- Adding a new product = new `pricing` row + new TypeScript types + new prompt keys in DB. No schema migration needed.
 
 ### Session Steps
 - `0–6`: Conversational collection of 5 fields (GPT-controlled)
@@ -116,7 +133,7 @@ STRIPE_WEBHOOK_SECRET=
 ## Migration Conventions
 
 - Never edit existing migration files — always create a new one
-- Naming: `[timestamp]_[seq]_[action]_[target].sql` (e.g. `20260415_003_add_delivered_at_to_orders.sql`)
+- Naming: `{running_number}_{action}_{target}.sql` (e.g. `0000007_add_delivered_at_to_orders.sql`)
 - Test locally with `bunx supabase db reset` before pushing to any environment
 
 ## Environments

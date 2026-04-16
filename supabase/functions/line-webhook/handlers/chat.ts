@@ -5,6 +5,7 @@ import {
   getPricing,
 } from "../../_shared/configService.ts";
 import {
+  paymentButtonMessage,
   quickReply,
   replyMessages,
   replyText,
@@ -16,18 +17,14 @@ import {
   sessionToCollectedData,
   updateSession,
 } from "../../_shared/db/userSessions.ts";
-import { createOrder } from "../../_shared/db/orders.ts";
-import { createCheckoutSession } from "../lib/checkout.ts";
+import { createOrder, getOrderByOrderNo, updateOrder } from "../../_shared/db/orders.ts";
+import { createCheckoutSession, getOrRefreshCheckoutUrl } from "../lib/checkout.ts";
 import {
   buildGuidedQuickReplies,
   extractedToCollected,
 } from "../lib/guided.ts";
 import { formatCollectedData } from "../lib/messages.ts";
-import type {
-  BotResponse,
-  ChatMessage,
-  UserSession,
-} from "../../_shared/types.ts";
+import type { ChatMessage, UserSession } from "../../_shared/types.ts";
 
 const MAX_CONVERSATION_HISTORY = 40;
 const ai = new MockAIService();
@@ -36,32 +33,30 @@ export async function handleAwaitingPayment(
   replyToken: string,
   session: UserSession,
 ): Promise<void> {
-  console.log(`💳 Resending payment link | order: ${session.current_order_no}`)
+  console.log(`💳 Awaiting payment reminder | order: ${session.current_order_no}`)
   if (!session.current_order_no) {
-    await replyText(
-      replyToken,
-      "กำลังรอการชำระเงินอยู่นะคะ หากมีปัญหาพิมพ์ว่า เริ่มใหม่ ได้เลยค่ะ",
-    );
-    return;
+    await replyText(replyToken, "กำลังรอการชำระเงินอยู่นะคะ หากมีปัญหาพิมพ์ว่า เริ่มใหม่ ได้เลยค่ะ")
+    return
   }
-  const pricing = await getPricing();
+
+  const order = await getOrderByOrderNo(session.current_order_no)
+  if (!order) {
+    await replyText(replyToken, "ไม่พบคำสั่งซื้อนะคะ กรุณาพิมพ์ว่า เริ่มใหม่ เพื่อเริ่มใหม่ได้เลยค่ะ 🙏")
+    return
+  }
+
+  const pricing = await getPricing(session.package_key)
   if (!pricing.stripe_price_id) {
     console.error("❌ stripe_price_id is not set in pricing table")
-    await replyText(
-      replyToken,
-      "ขออภัยค่ะ ระบบชำระเงินยังไม่พร้อม กรุณาติดต่อเราผ่าน LINE OA นี้ได้เลยนะคะ 🙏",
-    );
-    return;
+    await replyText(replyToken, "ขออภัยค่ะ ระบบชำระเงินยังไม่พร้อม กรุณาติดต่อเราผ่าน LINE OA นี้ได้เลยนะคะ 🙏")
+    return
   }
-  const checkoutUrl = await createCheckoutSession(
-    session.line_user_id,
-    session.current_order_no,
-    pricing.stripe_price_id,
-  );
-  await replyText(
-    replyToken,
-    `กรุณาชำระเงินผ่านลิงก์นี้ได้เลยค่ะ 💳\n\n${checkoutUrl}`,
-  );
+
+  const checkoutUrl = await getOrRefreshCheckoutUrl(order, pricing.stripe_price_id)
+  await replyMessages(replyToken, [
+    { type: "text", text: "น้องมงคลยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว น้องจะสร้างรูปมงคลให้ทันทีเลยค่ะ ✨" },
+    paymentButtonMessage(`ชำระเงิน ${pricing.price} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
+  ])
 }
 
 export async function handleChat(
@@ -95,17 +90,13 @@ export async function handleChat(
     return;
   }
 
-  // Build session patch
+  // Build session patch — merge extracted fields into collected_data JSONB
   const patch: Partial<UserSession> = {};
   const ex = botResponse.extracted;
-  if (ex.full_name != null) patch.full_name = ex.full_name;
-  if (ex.birthdate != null) patch.birthdate = ex.birthdate;
-  if (ex.wish != null) patch.wish = ex.wish;
-  if (ex.deity != null) {
-    patch.deity_key = ex.deity;
-    patch.deity_source = "user";
+  const extractedFields = extractedToCollected(ex)
+  if (Object.keys(extractedFields).length > 0) {
+    patch.collected_data = { ...collected, ...extractedFields }
   }
-  if (ex.color != null) patch.color = ex.color;
 
   // Off-topic tracking
   if (botResponse.is_off_topic) {
@@ -143,7 +134,7 @@ export async function handleChat(
   if (botResponse.is_complete && stillMissing.length === 0) {
     console.log(`🎉 All fields collected — creating order`)
     const orderNo = generateOrderNo();
-    const pricing = await getPricing();
+    const pricing = await getPricing(session.package_key);
     if (!pricing.stripe_price_id) {
       console.error("❌ stripe_price_id is not set in pricing table")
       await replyText(
@@ -152,23 +143,21 @@ export async function handleChat(
       );
       return;
     }
-    const checkoutUrl = await createCheckoutSession(
+    const { url: checkoutUrl, sessionId: stripeSessionId } = await createCheckoutSession(
       userId,
       orderNo,
       pricing.stripe_price_id,
-    );
+    )
 
-    await createOrder(userId, session.id, orderNo);
-    await updateSession(session.id, { step: 7, current_order_no: orderNo });
+    const order = await createOrder(userId, session.id, orderNo)
+    await updateOrder(order.id, { stripe_session_id: stripeSessionId, checkout_url: checkoutUrl })
+    await updateSession(session.id, { step: 7, current_order_no: orderNo })
     console.log(`📦 Order created: ${orderNo} | Stripe checkout sent`)
 
     await replyMessages(replyToken, [
       { type: "text", text: botResponse.message },
-      {
-        type: "text",
-        text: `ชำระเงิน ${pricing.price} บาท เพื่อรับรูปมงคลของคุณได้เลยค่ะ 💳\n\n${checkoutUrl}`,
-      },
-    ]);
+      paymentButtonMessage(`ชำระเงิน ${pricing.price} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
+    ])
     return;
   }
 

@@ -1,5 +1,5 @@
 import { quickReplyItem } from "../../_shared/lineService.ts"
-import type { BotResponse, CollectedData } from "../../_shared/types.ts"
+import type { BotResponse, WallpaperCollectedData } from "../../_shared/types.ts"
 
 export function buildGuidedQuickReplies(missingFields: string[]) {
   const labels: Record<string, [string, string]> = {
@@ -16,12 +16,15 @@ export function buildGuidedQuickReplies(missingFields: string[]) {
   })
 }
 
-export function extractedToCollected(ex: BotResponse["extracted"]): Partial<CollectedData> {
-  const result: Partial<CollectedData> = {}
+export function extractedToCollected(ex: BotResponse["extracted"]): Partial<WallpaperCollectedData> {
+  const result: Partial<WallpaperCollectedData> = {}
   if (ex.full_name != null) result.full_name = ex.full_name
   if (ex.birthdate != null) result.birthdate = ex.birthdate
   if (ex.wish != null) result.wish = ex.wish
-  if (ex.deity != null) result.deity_key = ex.deity
+  if (ex.deity != null) {
+    result.deity_key = ex.deity
+    result.deity_source = "user"
+  }
   if (ex.color != null) result.color = ex.color
   return result
 }
