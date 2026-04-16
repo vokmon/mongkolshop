@@ -1,6 +1,15 @@
 import { getClient } from "./client.ts"
 import type { UserSession, WallpaperCollectedData } from "../types.ts"
 
+export async function getSessionById(id: number): Promise<UserSession | null> {
+  const { data } = await getClient()
+    .from("user_sessions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+  return data
+}
+
 export async function getActiveSession(lineUserId: string): Promise<UserSession | null> {
   const { data } = await getClient()
     .from("user_sessions")
