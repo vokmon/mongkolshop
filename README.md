@@ -6,9 +6,9 @@ LINE OA Chatbot ที่สนทนากับผู้ใช้เป็น�
 
 - **Runtime:** Supabase Edge Functions (Deno/TypeScript)
 - **Database:** Supabase PostgreSQL
-- **Storage:** Supabase Storage
+- **Storage:** Supabase Storage (bucket: `images`, public)
 - **AI:** OpenAI GPT-4o + DALL-E 3
-- **Payment:** Stripe Checkout
+- **Payment:** Stripe Checkout (รองรับ PromptPay + บัตร + โค้ดส่วนลด)
 - **Messaging:** LINE Messaging API
 
 ## Prerequisites
@@ -24,25 +24,25 @@ LINE OA Chatbot ที่สนทนากับผู้ใช้เป็น�
 ```
 supabase/
   functions/
-    line-webhook/       # รับ LINE events + chatbot logic
-    stripe-webhook/     # รับ payment success → trigger generate-image
-    generate-image/     # Background job: สร้างรูป + ส่ง LINE
-    reminder-check/     # Cron: remind users ที่หายกลางทาง
-    stuck-order-check/  # Cron: ตรวจ order ค้าง generating
-    cleanup-sessions/   # Cron: archive + ล้าง ghost sessions
-    _shared/            # Shared services (types, DB, LINE, OpenAI)
-  migrations/           # SQL migration files
-  config.toml           # Supabase config + cron schedules
+    line-webhook/         # รับ LINE events + chatbot logic
+    stripe-webhook/       # รับ payment success/expiry → trigger generate-wallpaper
+    generate-wallpaper/   # Background job: สร้างรูปมงคล + ส่ง LINE
+    reminder-check/       # Cron (ทุก 2h): remind users ที่หายกลางทาง
+    stuck-order-check/    # Cron (ทุก 5min): ตรวจ order ค้าง + redeliver
+    cleanup-sessions/     # Cron (02:00 ทุกวัน): ล้าง ghost sessions
+    _shared/              # Shared services (types, DB, LINE, AI, router)
+  migrations/             # SQL migration files
+  config.toml             # Supabase config
 scripts/
-  migrate.sh            # รัน migrations ขึ้น dev/prod
-  deploy-function.sh    # Deploy Edge Function ขึ้น dev/prod
+  deploy-function.sh      # Deploy Edge Function(s) + push secrets
+  migrate.sh              # รัน migrations ขึ้น dev/prod
 env/
-  .env.example          # Template สำหรับ app secrets
-  .supabase.example     # Template สำหรับ CLI credentials
-  .env.dev              # App secrets (gitignored)
-  .env.prod             # App secrets (gitignored)
-  .supabase.dev         # CLI credentials (gitignored)
-  .supabase.prod        # CLI credentials (gitignored)
+  .env.example            # Template สำหรับ app secrets
+  .supabase.example       # Template สำหรับ CLI credentials
+  .env.dev                # App secrets (gitignored)
+  .env.prod               # App secrets (gitignored)
+  .supabase.dev           # CLI credentials (gitignored)
+  .supabase.prod          # CLI credentials (gitignored)
 ```
 
 ## Setup
@@ -74,36 +74,40 @@ SUPABASE_DB_URL=         # Supabase dashboard → Settings → Database → URI
 
 **`env/.env.dev`** และ **`env/.env.prod`**
 ```
-SUPABASE_URL=            # https://<project-ref>.supabase.co
+SUPABASE_URL=               # https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase dashboard → Settings → API → service_role
 
 LINE_CHANNEL_ACCESS_TOKEN=  # LINE Developers → Messaging API → Channel access token
 LINE_CHANNEL_SECRET=        # LINE Developers → Basic Settings → Channel secret
+LINE_OA_URL=                # LINE OA URL for redirect after payment
 
-OPENAI_API_KEY=          # platform.openai.com → API keys
+OPENAI_API_KEY=             # platform.openai.com → API keys
 
-STRIPE_SECRET_KEY=       # Stripe dashboard → Developers → API keys (sk_test_ / sk_live_)
-STRIPE_WEBHOOK_SECRET=   # Stripe dashboard → Developers → Webhooks → Signing secret
+STRIPE_SECRET_KEY=          # Stripe dashboard → Developers → API keys
+STRIPE_WEBHOOK_SECRET=      # Stripe dashboard → Developers → Webhooks → Signing secret
 ```
 
-### 4. รัน migrations
+### 4. สร้าง Storage bucket
+
+ใน Supabase dashboard → Storage → สร้าง bucket ชื่อ `images` ตั้งค่าเป็น **public**
+
+### 5. รัน migrations
 
 ```bash
 ./scripts/migrate.sh dev
 ```
 
-### 5. อัปเดต Stripe price ID ใน database
+### 6. อัปเดต Stripe price ID ใน database
 
 หลังสร้าง product ใน Stripe แล้ว ให้ update `stripe_price_id` ใน `pricing` table ผ่าน Supabase dashboard
 
-### 6. Deploy Edge Functions
+### 7. Deploy Edge Functions
 
 ```bash
-./scripts/deploy-function.sh dev line-webhook
-./scripts/deploy-function.sh dev stripe-webhook
+./scripts/deploy-function.sh dev all
 ```
 
-### 7. ตั้งค่า Webhook URLs
+### 8. ตั้งค่า Webhook URLs
 
 **LINE:** LINE Developers → Messaging API → Webhook URL
 ```
@@ -116,7 +120,29 @@ https://<dev-ref>.supabase.co/functions/v1/line-webhook
 ```
 https://<dev-ref>.supabase.co/functions/v1/stripe-webhook
 ```
-Events: `checkout.session.completed`, `payment_intent.payment_failed`
+Events: `checkout.session.completed`, `checkout.session.expired`
+
+### 9. ตั้งค่า Cron Jobs
+
+ใน Supabase dashboard → Database → Cron Jobs → Add job:
+
+| Name | Schedule | Body |
+|---|---|---|
+| `stuck-order-check` | `*/5 * * * *` | `{"inactive_hours": 2}` |
+| `reminder-check` | `0 */2 * * *` | `{"inactive_hours": 2}` |
+| `cleanup-sessions` | `0 2 * * *` | `{"ghost_days": 3}` |
+
+SQL สำหรับแต่ละ job:
+```sql
+select net.http_post(
+  url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/<function-name>',
+  headers := jsonb_build_object(
+    'Content-Type', 'application/json',
+    'Authorization', 'Bearer YOUR_SERVICE_ROLE_KEY'
+  ),
+  body := '<body>'::jsonb
+)
+```
 
 ## Deployment
 
@@ -133,17 +159,14 @@ Events: `checkout.session.completed`, `payment_intent.payment_failed`
 ### Deploy Edge Function
 
 ```bash
-# Dev
+# Deploy function เดียว
 ./scripts/deploy-function.sh dev <function-name>
 
-# Prod (ต้องพิมพ์ YES ยืนยัน)
-./scripts/deploy-function.sh prod <function-name>
-```
+# Deploy ทุก function
+./scripts/deploy-function.sh dev all
 
-ตัวอย่าง:
-```bash
-./scripts/deploy-function.sh dev line-webhook
-./scripts/deploy-function.sh prod generate-image
+# Prod (ต้องพิมพ์ YES ยืนยัน)
+./scripts/deploy-function.sh prod all
 ```
 
 `deploy-function.sh` จะ deploy function และ push secrets จาก env file ให้อัตโนมัติ
@@ -151,10 +174,10 @@ Events: `checkout.session.completed`, `payment_intent.payment_failed`
 ### Migration naming convention
 
 ```
-YYYYMMDD_NNN_description.sql
+{running_number}_{action}_{target}.sql
 ```
 
-ตัวอย่าง: `20260415_001_schema.sql`, `20260416_001_seed.sql`
+ตัวอย่าง: `0000009_add_package_key_to_orders.sql`
 
 **ห้ามแก้ไข migration file เก่า** — ให้สร้างไฟล์ใหม่เสมอ
 

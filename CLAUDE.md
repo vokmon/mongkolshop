@@ -14,9 +14,9 @@ LINE OA channel: `@652hgnwz`
 
 - **Runtime:** Supabase Edge Functions (Deno/TypeScript)
 - **Database:** Supabase PostgreSQL
-- **Storage:** Supabase Storage (generated PNG images, organized by user_id)
+- **Storage:** Supabase Storage (generated PNG images, bucket: `images`, public)
 - **AI:** OpenAI GPT-4o (chatbot + image prompt + fortune), DALL-E 3 (1024×1792 HD)
-- **Payment:** Stripe Checkout (159 THB, supports PromptPay + cards)
+- **Payment:** Stripe Checkout (159 THB, supports PromptPay + cards, promotion codes enabled)
 - **Messaging:** LINE Messaging API
 
 ## Commands
@@ -27,11 +27,14 @@ All Supabase commands use `bunx supabase` (not a global CLI install).
 # Create a new migration file
 bunx supabase migration new <name>
 
-# Deploy to dev environment
-./scripts/deploy-dev.sh
+# Deploy a single function to dev
+./scripts/deploy-function.sh dev <function-name>
+
+# Deploy all functions to dev
+./scripts/deploy-function.sh dev all
 
 # Deploy to production (requires typing "YES" to confirm)
-./scripts/deploy-prod.sh
+./scripts/deploy-function.sh prod <function-name>
 ```
 
 ## Project Structure
@@ -39,81 +42,132 @@ bunx supabase migration new <name>
 ```
 supabase/
   functions/
-    line-webhook/     # Main LINE event handler — entry point for all LINE messages
-    stripe-webhook/   # Handles payment success → triggers generate-image
-    generate-image/   # Background job: GPT-4o → DALL-E 3 → Storage → LINE push
-    reminder-check/   # Cron (every 1h): remind users who abandoned mid-flow
-    stuck-order-check/ # Cron (every 5min): detect orders stuck in "generating"
-    cleanup-sessions/ # Cron (02:00 daily): archive history, delete ghost sessions
+    line-webhook/       # Main LINE event handler — entry point for all LINE messages
+    stripe-webhook/     # Handles payment success/expiry → triggers generate-wallpaper
+    generate-wallpaper/ # Background job: GPT-4o → DALL-E 3 → Storage → LINE push
+    reminder-check/     # Cron (every 2h): remind users who abandoned mid-flow
+    stuck-order-check/  # Cron (every 5min): retry stuck/zombie orders, redeliver undelivered
+    cleanup-sessions/   # Cron (02:00 daily): deactivate ghost sessions
     _shared/
-      types.ts        # TypeScript interfaces — DB tables, GPT responses, product-specific data types
-      lineService.ts  # LINE reply/push/quickReply/paymentButton helpers
-      configService.ts   # Loads prompts + pricing from DB (prompts cached, pricing not)
+      types.ts             # TypeScript interfaces — DB tables, GPT responses, product-specific data types
+      lineService.ts       # LINE reply/push/quickReply/paymentButton helpers
+      configService.ts     # Loads prompts + pricing from DB (prompts cached by package_key:prompt_key)
+      checkoutService.ts   # Stripe checkout session creation (allow_promotion_codes: true)
+      generationRouter.ts  # Maps package_key → Edge Function name, fire-and-forget invoker
       ai/
-        aiService.ts  # IAiService interface
+        aiService.ts       # IAiService interface
         impl/
-          openai.ts   # OpenAIService (uses npm:openai, web search on generateImagePrompt)
-          mock.ts     # MockAIService for testing without OpenAI key
+          openai.ts        # OpenAIService (uses npm:openai, web search on generateImagePrompt)
+          mock.ts          # MockAIService for testing without OpenAI key
       db/
-        client.ts     # Supabase client factory
-        userConsents.ts
-        userSessions.ts  # getActiveSession, createSession, updateSession, sessionToCollectedData
-        orders.ts        # createOrder, updateOrder, getStuckOrders
-        pricing.ts       # getActivePricingByKey(packageKey)
-        prompts.ts
-        storage.ts       # uploadImage → Supabase Storage
+        client.ts          # Supabase client factory
+        userConsents.ts    # upsertConsent(lineUserId, accepted, displayName?)
+        userSessions.ts    # getActiveSession, createSession, updateSession, sessionToCollectedData, getSessionsForReminder, getGhostSessions
+        orders.ts          # createOrder, updateOrder, getStuckGeneratingOrders, getAbandonedPaidOrders, getUndeliveredOrders
+        pricing.ts         # getActivePricingByKey(packageKey)
+        prompts.ts         # getAllPrompts()
+        storage.ts         # uploadImage → Supabase Storage
+      products/
+        wallpaper.ts       # buildWallpaperDeliveryText(content) — shared delivery message builder
   migrations/
-    001_schema.sql    # All table definitions
-    002_seed.sql      # Initial prompts + pricing data
-  config.toml         # Supabase config + cron schedules
+    20260415_001_schema.sql   # All table definitions
+    20260416_001_seed.sql     # Initial prompts + pricing data
+    0000003_...               # Incremental migrations (format: {N}_{action}_{target}.sql)
+  config.toml                 # Supabase config (no cron schedules — set up via Supabase dashboard)
 scripts/
-  deploy-test.sh
-  deploy-prod.sh
-docs/                 # Planning documents (read-only reference)
+  deploy-function.sh    # Deploy Edge Function(s) + push secrets to dev or prod
+  migrate.sh            # Run DB migrations against dev or prod
+docs/                   # Planning documents (read-only reference)
 ```
 
 ## Architecture
 
 ### Core Flow
 1. LINE sends webhook → `line-webhook/index.ts`
-2. Check `user_consents` (PDPA) → if not accepted, send consent message
+2. Check `user_consents` (PDPA) → if not accepted, send consent message + save `display_name`
 3. Check special keywords (`สถานะ`, `เริ่มใหม่`, `ช่วยด้วย`, etc.) → handle immediately
-4. If `step = 7` (awaiting Stripe payment) → reply status only, skip GPT
+4. If `step = 7` (awaiting Stripe payment) → reply with payment reminder + refresh link if expired
 5. Send message + last 20 conversation history to GPT-4o with `bot_personality` prompt
 6. GPT returns `{ message, extracted, is_complete, is_off_topic }` as JSON
-7. Merge extracted fields into `user_sessions`, update `off_topic_count`
-8. If `is_complete` → create order in `orders` table → send Stripe payment link via LINE
+7. Merge extracted fields into `user_sessions.collected_data` JSONB, reset `last_reminded_at = null`
+8. If `is_complete` → create order in `orders` table → send Stripe payment button via LINE
 9. Save to `conversation_history`, reply to user
 
 ### Payment → Generation
 - Stripe fires `checkout.session.completed` → `stripe-webhook/index.ts`
-- Updates `orders.status = 'paid'`, invokes `generate-image` as background task
-- `generate-image` pulls order + session data, fetches prompt templates from DB
-- Calls GPT-4o to produce image prompt + fortune JSON
+- Extracts promotion code + discount amount if applied
+- Updates `orders.status = 'paid'`, calls `invokeGenerationJob(order)` from `generationRouter.ts`
+- Router maps `order.package_key` → correct Edge Function (`wallpaper` → `generate-wallpaper`)
+- `generate-wallpaper` pulls order + session data, fetches prompt templates from DB by `package_key`
+- Calls GPT-4o to recommend deity (if not set) → generate fortune JSON → generate image prompt
 - Calls DALL-E 3 → uploads PNG to Supabase Storage → updates order → pushes to LINE
+
+### Stripe Checkout Expiry
+- Stripe fires `checkout.session.expired` → `stripe-webhook/index.ts`
+- Auto-regenerates a new checkout link, updates order, pushes new payment button to LINE
+
+### Cron Jobs (set up via Supabase Dashboard)
+| Function | Schedule | Payload |
+|---|---|---|
+| `stuck-order-check` | `*/5 * * * *` | `{}` |
+| `reminder-check` | `0 */2 * * *` | `{"inactive_hours": 2}` |
+| `cleanup-sessions` | `0 2 * * *` | `{"ghost_days": 3}` |
+
+### stuck-order-check Scenarios
+| Scenario | Condition | Action |
+|---|---|---|
+| Stuck generating (retryable) | `status=generating`, `generating_at < now-5min`, `attempts < 5` | Re-invoke `generate-wallpaper` |
+| Zombie | `status=generating`, `generating_at < now-5min`, `attempts >= 5` | Mark `failed` + notify LINE |
+| Abandoned paid | `status=paid`, `paid_at < now-5min` | Invoke `generate-wallpaper` |
+| Done but not delivered | `status=done`, `delivered_at IS NULL`, `completed_at < now-5min` | Re-push image to LINE |
 
 ### Database Tables
 | Table | Purpose |
 |---|---|
-| `user_consents` | PDPA — one row per LINE user, tracks acceptance/withdrawal |
-| `user_sessions` | Conversation state — step (0–8), `collected_data` JSONB, history, off_topic_count, package_key |
-| `orders` | Payment + generation lifecycle — `generated_content` JSONB, `image_url`, status: pending→paid→generating→done\|failed |
-| `prompts` | All AI prompt templates stored in DB (editable without redeploy) |
+| `user_consents` | PDPA — one row per LINE user, tracks acceptance/withdrawal, stores `display_name` |
+| `user_sessions` | Conversation state — step (0–8), `collected_data` JSONB, history, `package_key`, reminder tracking |
+| `orders` | Payment + generation lifecycle — `generated_content` JSONB, `image_url`, `package_key`, `promotion_code`, `discount_amount`, status: pending→paid→generating→done\|failed |
+| `prompts` | AI prompt templates — scoped by `package_key` (`shared` or `wallpaper`), unique on `(package_key, prompt_key)` |
 | `pricing` | Package config per `package_key` — price, stripe_price_id |
 
 ### Multi-product Design
-- `user_sessions.collected_data` — JSONB, cast to product-specific type in TypeScript (e.g. `WallpaperCollectedData`)
+- `user_sessions.collected_data` — JSONB, cast to product-specific type (e.g. `WallpaperCollectedData`)
 - `orders.generated_content` — JSONB, cast to product-specific type (e.g. `WallpaperGeneratedContent`)
-- `user_sessions.package_key` — defaults to `"wallpaper"`, determines which pricing row to use
-- Adding a new product = new `pricing` row + new TypeScript types + new prompt keys in DB. No schema migration needed.
+- `user_sessions.package_key` + `orders.package_key` — determines which function, pricing, and prompts to use
+- `prompts.package_key` — `'shared'` (bot_personality, privacy_policy) or product-specific (`'wallpaper'`)
+- `generationRouter.ts` — maps `package_key` to the correct generation Edge Function
+- Adding a new product = new `pricing` row + new prompt rows + new TypeScript types + new Edge Function + entry in `FUNCTION_MAP`
+
+### Prompt Keys
+| package_key | prompt_key | Used by |
+|---|---|---|
+| `shared` | `bot_personality` | line-webhook |
+| `shared` | `privacy_policy` | line-webhook |
+| `wallpaper` | `fortune_generation` | generate-wallpaper |
+| `wallpaper` | `image_generation` | generate-wallpaper |
+| `wallpaper` | `deity_recommendation` | generate-wallpaper |
+
+### Deity Traditions
+Prompts support three traditions — examples only, GPT may recommend beyond the list:
+- **เทพพราหมณ์ฮินดู**: พระพิฆเนศ, พระแม่ลักษมี, พระพรหม, พระวิษณุ, พระศิวะ, พระแม่กาลี, พระแม่ทุรคา, พระแม่สรัสวดี, ท้าวเวสสุวรรณ, พระราหู, หนุมาน
+- **เทพจีน**: เจ้าแม่กวนอิม, ไฉ่สิ้งเอี้ย, กวนอู, เจ้าแม่ทับทิม, ตี่จู้เอี้ย, พระสังกัจจาย, ง็อกอ๊วง, เทพนาจา, เจ้าพ่อเสือ, ฮกลกซิ่ว
+- **เทพไทย**: พระภูมิเจ้าที่, แม่ย่านาง, นางกวัก, พระแม่ธรณี, พระแม่คงคา, พ่อปู่ฤๅษีชีวก, พ่อปู่ศรีสุทโธ (พญานาค), เจ้าพ่อหลักเมือง
+
+All output including mantra must be in Thai (phonetic transliteration for non-Thai scripts).
 
 ### Session Steps
-- `0–6`: Conversational collection of 5 fields (GPT-controlled)
+- `0`: Session created, no activity yet
+- `1–6`: Conversational collection of 5 fields (GPT-controlled)
 - `7`: Awaiting Stripe payment
 - `8`: Done — image delivered
 
 ### Off-topic Escalation
 - Count 1–2: soft redirect | 3–4: direct redirect | 5+: guided mode (quick reply buttons) | 10+: deactivate session
+
+### Reminder Flow
+- Triggers when `current_order_no IS NULL` (data collection not complete) and inactive for `inactive_hours`
+- Max 3 reminders, then session deactivated with `abandoned_reason = 'no_response'`
+- `last_reminded_at` reset to `null` on every user message (restarts cooldown)
 
 ## Environment Variables
 
@@ -128,13 +182,13 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 ```
 
-`.env.local`, `.env.test`, `.env.production` are all gitignored. Only `.env.example` is committed.
+`.env.dev`, `.env.prod` are gitignored. Only `.env.example` is committed.
 
 ## Migration Conventions
 
 - Never edit existing migration files — always create a new one
-- Naming: `{running_number}_{action}_{target}.sql` (e.g. `0000007_add_delivered_at_to_orders.sql`)
-- Test locally with `bunx supabase db reset` before pushing to any environment
+- Naming: `{running_number}_{action}_{target}.sql` (e.g. `0000009_add_package_key_to_orders.sql`)
+- Run against remote dev: `./scripts/migrate.sh dev`
 
 ## Environments
 
