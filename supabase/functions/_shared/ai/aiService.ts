@@ -8,9 +8,6 @@ export interface IAiService {
     userMessage: string,
   ): Promise<BotResponse>
 
-  /** Generate an English image prompt from the image_generation template. */
-  generateImagePrompt(filledPrompt: string): Promise<string>
-
   /** Generate fortune, mantra, and worship guide from the fortune_telling template. */
   generateContent(filledPrompt: string): Promise<GeneratedContent>
 

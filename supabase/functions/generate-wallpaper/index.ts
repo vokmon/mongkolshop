@@ -97,16 +97,13 @@ async function runGeneration(
     });
     const fortuneContent = await ai.generateContent(fortunePrompt);
 
-    // ── 6. Generate image prompt ──────────────────────────────
-    console.log(`✍️ Generating image prompt...`);
-    const imagePromptTemplate = fillPrompt(await getPrompt("wallpaper", "image_generation"), {
+    // ── 6. Fill image prompt ──────────────────────────────────
+    const imagePrompt = fillPrompt(await getPrompt("wallpaper", "image_generation"), {
       collected_data: JSON.stringify(collectedWithDeity, null, 2),
-      fortune_data: JSON.stringify(fortuneContent, null, 2),
     });
-    const imagePrompt = await ai.generateImagePrompt(imagePromptTemplate);
 
     // ── 7. Generate image ─────────────────────────────────────
-    console.log(`🖼️ Calling DALL-E 3...`);
+    console.log(`🖼️ Generating image...`);
     const imageBytes = await ai.createImage(imagePrompt);
 
     // ── 8. Upload to Storage ──────────────────────────────────

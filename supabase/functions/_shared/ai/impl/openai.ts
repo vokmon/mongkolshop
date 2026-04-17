@@ -1,66 +1,83 @@
-import OpenAI from "npm:openai"
-import type { BotResponse, ChatMessage, DeityRecommendation, GeneratedContent } from "../../types.ts"
-import type { IAiService } from "../aiService.ts"
+import OpenAI from "npm:openai";
+import type {
+  BotResponse,
+  ChatMessage,
+  DeityRecommendation,
+  GeneratedContent,
+} from "../../types.ts";
+import type { IAiService } from "../aiService.ts";
 
-const DEFAULT_CHAT_MODEL = "gpt-4o"
-const WEB_SEARCH_MODEL = "gpt-4o-search-preview"
-const IMAGE_MODEL = "dall-e-3"
-const IMAGE_SIZE = "1024x1792" as const
-const IMAGE_QUALITY = "hd" as const
+const CHAT_MODEL = "gpt-5.4-mini";
+const IMAGE_MODEL = "gpt-image-1";
+
+const MAX_RETRIES = 2;
+const TEXT_TIMEOUT_MS = 90_000;
+const IMAGE_TIMEOUT_MS = 5 * 60 * 1000;
+
+type ImageSize =
+  | "1024x1024"
+  | "1024x1536"
+  | "1536x1024"
+  | "1024x1792"
+  | "1792x1024";
+type ImageQuality = "low" | "medium" | "high";
+
+// deno-lint-ignore no-explicit-any
+function isRetryable(err: any): boolean {
+  const status = err?.status;
+  const code = err?.code;
+  return (
+    (status === undefined && !!code) ||
+    status >= 500 ||
+    status === 429 ||
+    code === "ETIMEDOUT" ||
+    code === "ECONNRESET"
+  );
+}
 
 export class OpenAIService implements IAiService {
-  private readonly client: OpenAI
+  private readonly client: OpenAI;
 
   constructor() {
-    this.client = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! })
+    this.client = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
   }
 
-  /**
-   * Core chat completion wrapper.
-   *
-   * Options:
-   * - `model`          — defaults to "gpt-4o"
-   * - `responseFormat` — "json" adds response_format: json_object (cannot be combined with webSearch)
-   * - `webSearch`      — uses gpt-4o-search-preview + web_search_preview tool; returns plain text only
-   */
-  private currentDatetimeContext(): OpenAI.Chat.ChatCompletionMessageParam {
-    const now = new Date().toLocaleString("th-TH", {
+  private currentDatetime(): string {
+    return new Date().toLocaleString("th-TH", {
       timeZone: "Asia/Bangkok",
       dateStyle: "full",
       timeStyle: "short",
-    })
-    return { role: "system", content: `วันและเวลาปัจจุบัน: ${now}` }
+    });
   }
 
-  private async chatCompletion(
-    messages: OpenAI.Chat.ChatCompletionMessageParam[],
-    options: {
-      model?: string
-      responseFormat?: "json"
-      webSearch?: boolean
-    } = {},
-  ): Promise<string> {
-    if (options.webSearch && options.responseFormat === "json") {
-      throw new Error("webSearch and responseFormat:json cannot be used together (OpenAI limitation)")
+  private parseJson<T>(raw: string, context: string): T {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      throw new Error(
+        `❌ Invalid JSON from model [${context}]: ${raw.slice(0, 200)}`,
+      );
     }
+  }
 
-    const model = options.webSearch
-      ? WEB_SEARCH_MODEL
-      : (options.model ?? DEFAULT_CHAT_MODEL)
-
-    const response = await this.client.chat.completions.create({
-      model,
-      messages: [this.currentDatetimeContext(), ...messages],
-      ...(options.responseFormat === "json"
-        ? { response_format: { type: "json_object" } }
-        : {}),
-      ...(options.webSearch
-        // deno-lint-ignore no-explicit-any
-        ? { tools: [{ type: "web_search_preview" } as any] }
-        : {}),
-    })
-
-    return response.choices[0].message.content ?? ""
+  private async withRetry<T>(
+    fn: () => Promise<T>,
+    context: string,
+  ): Promise<T> {
+    const requestId = crypto.randomUUID().slice(0, 8);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await fn();
+      } catch (err) {
+        if (!isRetryable(err) || attempt === MAX_RETRIES) throw err;
+        const delay = Math.pow(2, attempt) * 1000;
+        console.warn(
+          `⚠️ [${context}] [${requestId}] Retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    throw new Error("unreachable");
   }
 
   async chatWithBot(
@@ -68,56 +85,75 @@ export class OpenAIService implements IAiService {
     history: ChatMessage[],
     userMessage: string,
   ): Promise<BotResponse> {
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      ...history,
-      { role: "user", content: userMessage },
-    ]
-    const raw = await this.chatCompletion(messages, { responseFormat: "json" })
-    return JSON.parse(raw) as BotResponse
-  }
-
-  /**
-   * Generate a DALL-E image prompt from a filled prompt template.
-   * Web search is enabled so the model can look up deity iconography,
-   * sacred colors, and symbol details before writing the prompt.
-   */
-  async generateImagePrompt(filledPrompt: string): Promise<string> {
-    return await this.chatCompletion(
-      [{ role: "user", content: filledPrompt }],
-      { webSearch: true },
-    )
+    const raw = await this.withRetry(async () => {
+      const response = await this.client.responses.create(
+        {
+          model: CHAT_MODEL,
+          instructions: `${systemPrompt}\n\nวันและเวลาปัจจุบัน: ${this.currentDatetime()}`,
+          input: [
+            ...history.map((m) => ({
+              role: m.role,
+              content: [{ type: "text", text: m.content }],
+            })),
+            { role: "user", content: [{ type: "text", text: userMessage }] },
+          ],
+          text: { format: { type: "json_object" } },
+        },
+        { timeout: TEXT_TIMEOUT_MS },
+      );
+      return response.output_text ?? "";
+    }, "chatWithBot");
+    return this.parseJson<BotResponse>(raw, "chatWithBot");
   }
 
   async generateContent(filledPrompt: string): Promise<GeneratedContent> {
-    const raw = await this.chatCompletion(
-      [{ role: "user", content: filledPrompt }],
-      { responseFormat: "json" },
-    )
-    return JSON.parse(raw) as GeneratedContent
+    const raw = await this.withRetry(async () => {
+      const response = await this.client.responses.create(
+        {
+          model: CHAT_MODEL,
+          instructions: `วันและเวลาปัจจุบัน: ${this.currentDatetime()}`,
+          input: filledPrompt,
+          text: { format: { type: "json_object" } },
+        },
+        { timeout: TEXT_TIMEOUT_MS },
+      );
+      return response.output_text ?? "";
+    }, "generateContent");
+    return this.parseJson<GeneratedContent>(raw, "generateContent");
   }
 
   async recommendDeity(filledPrompt: string): Promise<DeityRecommendation> {
-    const raw = await this.chatCompletion(
-      [{ role: "user", content: filledPrompt }],
-      { responseFormat: "json" },
-    )
-    return JSON.parse(raw) as DeityRecommendation
+    const raw = await this.withRetry(async () => {
+      const response = await this.client.responses.create(
+        {
+          model: CHAT_MODEL,
+          instructions: `วันและเวลาปัจจุบัน: ${this.currentDatetime()}`,
+          input: filledPrompt,
+          text: { format: { type: "json_object" } },
+        },
+        { timeout: TEXT_TIMEOUT_MS },
+      );
+      return response.output_text ?? "";
+    }, "recommendDeity");
+    return this.parseJson<DeityRecommendation>(raw, "recommendDeity");
   }
 
   async createImage(prompt: string): Promise<Uint8Array> {
-    const response = await this.client.images.generate({
-      model: IMAGE_MODEL,
-      prompt,
-      n: 1,
-      size: IMAGE_SIZE,
-      quality: IMAGE_QUALITY,
-    })
-
-    const tempUrl = response.data[0].url!
-    const imgRes = await fetch(tempUrl)
-    if (!imgRes.ok) throw new Error(`Failed to download image from DALL-E URL`)
-    const buffer = await imgRes.arrayBuffer()
-    return new Uint8Array(buffer)
+    const size = (Deno.env.get("IMAGE_SIZE") ?? "1024x1792") as ImageSize;
+    const quality = (Deno.env.get("IMAGE_QUALITY") ?? "medium") as ImageQuality;
+    return await this.withRetry(async () => {
+      const response = await this.client.images.generate(
+        {
+          model: IMAGE_MODEL,
+          prompt,
+          size,
+          quality,
+        },
+        { timeout: IMAGE_TIMEOUT_MS },
+      );
+      const b64 = response.data?.[0]?.b64_json;
+      if (!b64) throw new Error("No image returned from model");
+      return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    }, "createImage");
   }
 }

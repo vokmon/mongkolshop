@@ -68,10 +68,6 @@ export class MockAIService implements IAiService {
     }
   }
 
-  async generateImagePrompt(_filledPrompt: string): Promise<string> {
-    return "[MOCK] A golden Ganesha deity in Thai sacred art style, portrait orientation, divine aura, ultra detailed"
-  }
-
   async generateContent(_filledPrompt: string): Promise<GeneratedContent> {
     return {
       fortune_text: "[MOCK] ดวงชะตาของคุณสุกสว่างเหมือนทอง การงานและการเงินจะก้าวหน้าอย่างมั่นคงค่ะ",
