@@ -1,13 +1,13 @@
 # MongkolArt — น้องมงคล LINE OA Chatbot
 
-LINE OA Chatbot ที่สนทนากับผู้ใช้เป็นธรรมชาติ เก็บข้อมูล 5 อย่าง → รับชำระเงิน 159 บาทผ่าน Stripe → สร้างรูปมงคล AI เฉพาะบุคคลด้วย DALL-E 3 → ส่งกลับทาง LINE อัตโนมัติ
+LINE OA Chatbot ที่สนทนากับผู้ใช้เป็นธรรมชาติ เก็บข้อมูล 7 อย่าง → รับชำระเงิน 159 บาทผ่าน Stripe → สร้างรูปมงคลเฉพาะบุคคลด้วย gpt-image-1 → ส่งกลับทาง LINE อัตโนมัติ
 
 ## Tech Stack
 
 - **Runtime:** Supabase Edge Functions (Deno/TypeScript)
 - **Database:** Supabase PostgreSQL
 - **Storage:** Supabase Storage (bucket: `images`, public)
-- **AI:** OpenAI GPT-4o + DALL-E 3
+- **AI:** OpenAI gpt-5.4-mini (chatbot + fortune) + gpt-image-1 (image generation)
 - **Payment:** Stripe Checkout (รองรับ PromptPay + บัตร + โค้ดส่วนลด)
 - **Messaging:** LINE Messaging API
 
@@ -16,7 +16,7 @@ LINE OA Chatbot ที่สนทนากับผู้ใช้เป็น�
 - [Bun](https://bun.sh) — ใช้ `bunx supabase` แทน global Supabase CLI
 - Supabase account + 2 projects (dev + prod)
 - LINE Developer account + 2 OA channels (dev + prod)
-- OpenAI account (GPT-4o + DALL-E 3 access)
+- OpenAI account (gpt-5.4-mini + gpt-image-1 access)
 - Stripe account
 
 ## Project Structure
@@ -66,6 +66,7 @@ cp env/.supabase.example env/.supabase.prod
 ### 3. กรอก env files
 
 **`env/.supabase.dev`** และ **`env/.supabase.prod`**
+
 ```
 SUPABASE_ACCESS_TOKEN=   # supabase.com → Account → Access Tokens
 SUPABASE_PROJECT_REF=    # supabase.com/dashboard/project/<ref>
@@ -73,6 +74,7 @@ SUPABASE_DB_URL=         # Supabase dashboard → Settings → Database → URI
 ```
 
 **`env/.env.dev`** และ **`env/.env.prod`**
+
 ```
 SUPABASE_URL=               # https://<project-ref>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=  # Supabase dashboard → Settings → API → service_role
@@ -110,29 +112,34 @@ STRIPE_WEBHOOK_SECRET=      # Stripe dashboard → Developers → Webhooks → S
 ### 8. ตั้งค่า Webhook URLs
 
 **LINE:** LINE Developers → Messaging API → Webhook URL
+
 ```
 https://<dev-ref>.supabase.co/functions/v1/line-webhook
 ```
+
 - เปิด Use webhook ✅
 - ปิด Auto-reply messages ❌
 
 **Stripe:** Stripe dashboard → Developers → Webhooks → Add endpoint
+
 ```
 https://<dev-ref>.supabase.co/functions/v1/stripe-webhook
 ```
+
 Events: `checkout.session.completed`, `checkout.session.expired`
 
 ### 9. ตั้งค่า Cron Jobs
 
 ใน Supabase dashboard → Database → Cron Jobs → Add job:
 
-| Name | Schedule | Body |
-|---|---|---|
+| Name                | Schedule      | Body                    |
+| ------------------- | ------------- | ----------------------- |
 | `stuck-order-check` | `*/5 * * * *` | `{"inactive_hours": 2}` |
-| `reminder-check` | `0 */2 * * *` | `{"inactive_hours": 2}` |
-| `cleanup-sessions` | `0 2 * * *` | `{"ghost_days": 3}` |
+| `reminder-check`    | `0 */2 * * *` | `{"inactive_hours": 2}` |
+| `cleanup-sessions`  | `0 2 * * *`   | `{"ghost_days": 3}`     |
 
 SQL สำหรับแต่ละ job:
+
 ```sql
 select net.http_post(
   url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/<function-name>',
@@ -183,10 +190,10 @@ select net.http_post(
 
 ## Environments
 
-| | Dev | Prod |
-|---|---|---|
-| Supabase | Dev project | Prod project |
-| LINE OA | Dev channel | @652hgnwz |
-| Stripe | Test mode (`sk_test_`) | Live mode (`sk_live_`) |
+|          | Dev                    | Prod                   |
+| -------- | ---------------------- | ---------------------- |
+| Supabase | Dev project            | Prod project           |
+| LINE OA  | Dev channel            | @652hgnwz              |
+| Stripe   | Test mode (`sk_test_`) | Live mode (`sk_live_`) |
 
 การทดสอบทำโดย deploy ขึ้น dev environment โดยตรง ไม่มี local Supabase
