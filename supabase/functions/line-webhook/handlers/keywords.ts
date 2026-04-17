@@ -3,6 +3,7 @@ import { upsertConsent } from "../../_shared/db/userConsents.ts";
 import {
   createSession,
   deactivateSession,
+  wipeUserSessionData,
 } from "../../_shared/db/userSessions.ts";
 import { getOrderByOrderNo } from "../../_shared/db/orders.ts";
 import {
@@ -80,7 +81,10 @@ export async function handleSpecialKeyword(
       }
     }
     await deactivateSession(session.id, "user_data_deletion");
-    await upsertConsent(userId, false);
+    await Promise.all([
+      upsertConsent(userId, false),
+      wipeUserSessionData(userId),
+    ]);
     await replyText(
       replyToken,
       `ลบข้อมูลของคุณเรียบร้อยแล้วค่ะ 🙏 หากต้องการใช้บริการใหม่ พิมพ์ว่า ${KEYWORDS.CONSENT_ACCEPT} ได้เลยค่ะ`,

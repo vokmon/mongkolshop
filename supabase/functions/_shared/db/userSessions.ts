@@ -64,13 +64,35 @@ export async function deactivateSession(sessionId: number, reason?: string): Pro
   })
 }
 
+export async function getStaleDeactivatedSessions(days: number): Promise<UserSession[]> {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await getClient()
+    .from("user_sessions")
+    .select("*")
+    .eq("is_active", false)
+    .lt("updated_at", cutoff)
+  return data ?? []
+}
+
+export async function wipeUserSessionData(lineUserId: string): Promise<void> {
+  await getClient()
+    .from("user_sessions")
+    .update({
+      conversation_history: [],
+      collected_data: {},
+      updated_at: new Date().toISOString(),
+    })
+    .eq("line_user_id", lineUserId)
+}
+
 export async function getGhostSessions(days: number): Promise<UserSession[]> {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("is_active", true)
-    .lt("created_at", cutoff)
+    .is("current_order_no", null)  // don't touch sessions with an active order
+    .lt("updated_at", cutoff)
   return data ?? []
 }
 
