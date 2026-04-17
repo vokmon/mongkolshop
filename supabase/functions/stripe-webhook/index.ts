@@ -1,10 +1,11 @@
 import Stripe from "npm:stripe"
-import { createCheckoutSession } from "../_shared/checkoutService.ts"
+import { createCheckoutSession, getPriceAmount } from "../_shared/checkoutService.ts"
 import { getOrderByOrderNo, updateOrder } from "../_shared/db/orders.ts"
 import { getSessionById } from "../_shared/db/userSessions.ts"
 import { invokeGenerationJob } from "../_shared/generationRouter.ts"
 import { paymentButtonMessage, pushMessages, pushText } from "../_shared/lineService.ts"
 import { getPricing } from "../_shared/configService.ts"
+import { BOT_NAME, KEYWORDS } from "../_shared/constants.ts"
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
 
@@ -98,6 +99,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
     status: "paid",
     stripe_session_id: session.id,
     stripe_payment_id: paymentIntentId,
+    price_paid: session.amount_subtotal ?? 0,
     paid_at: new Date().toISOString(),
     ...(discountAmount > 0 && {
       promotion_code: promotionCode,
@@ -136,11 +138,10 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session): Promise<
   }
 
   // Regenerate a fresh checkout link — keep order in "pending"
-  const { url: newCheckoutUrl, sessionId: newSessionId } = await createCheckoutSession(
-    lineUserId,
-    orderNo,
-    pricing.stripe_price_id,
-  )
+  const [{ url: newCheckoutUrl, sessionId: newSessionId }, priceAmount] = await Promise.all([
+    createCheckoutSession(lineUserId, orderNo, pricing.stripe_price_id),
+    getPriceAmount(pricing.stripe_price_id),
+  ])
 
   await updateOrder(order.id, {
     stripe_session_id: newSessionId,
@@ -152,9 +153,9 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session): Promise<
   await pushMessages(lineUserId, [
     {
       type: "text",
-      text: "ลิงก์ชำระเงินหมดอายุแล้วค่ะ 😅 น้องมงคลสร้างลิงก์ใหม่ให้แล้วนะคะ ✨\nหรือพิมพ์ว่า เริ่มใหม่ หากต้องการเปลี่ยนข้อมูลค่ะ 🙏",
+      text: `ลิงก์ชำระเงินหมดอายุแล้วค่ะ 😅 ${BOT_NAME}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨\nหรือพิมพ์ว่า ${KEYWORDS.RESTART} หากต้องการเปลี่ยนข้อมูลค่ะ 🙏`,
     },
-    paymentButtonMessage(`ชำระเงิน ${pricing.price} บาท เพื่อรับรูปมงคลของคุณค่ะ`, newCheckoutUrl),
+    paymentButtonMessage(`ชำระเงิน ${priceAmount} บาท เพื่อรับรูปมงคลของคุณค่ะ`, newCheckoutUrl),
   ])
 }
 

@@ -2,6 +2,12 @@ import Stripe from "npm:stripe"
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
 
+/** Fetch the display price in THB from Stripe */
+export async function getPriceAmount(stripePriceId: string): Promise<number> {
+  const price = await stripe.prices.retrieve(stripePriceId)
+  return (price.unit_amount ?? 0) / 100
+}
+
 export async function createCheckoutSession(
   lineUserId: string,
   orderNo: string,

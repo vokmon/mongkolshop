@@ -42,6 +42,7 @@ export async function updateOrder(
     | "checkout_url"
     | "promotion_code"
     | "discount_amount"
+    | "price_paid"
     | "status"
     | "generated_content"
     | "image_url"

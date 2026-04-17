@@ -18,12 +18,13 @@ import {
   updateSession,
 } from "../../_shared/db/userSessions.ts";
 import { createOrder, getOrderByOrderNo, updateOrder } from "../../_shared/db/orders.ts";
-import { createCheckoutSession, getOrRefreshCheckoutUrl } from "../lib/checkout.ts";
+import { createCheckoutSession, getOrRefreshCheckoutUrl, getPriceAmount } from "../lib/checkout.ts";
 import {
   buildGuidedQuickReplies,
   extractedToCollected,
 } from "../lib/guided.ts";
 import { formatCollectedData } from "../lib/messages.ts";
+import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts";
 import type { ChatMessage, UserSession } from "../../_shared/types.ts";
 
 const MAX_CONVERSATION_HISTORY = 40;
@@ -52,10 +53,13 @@ export async function handleAwaitingPayment(
     return
   }
 
-  const checkoutUrl = await getOrRefreshCheckoutUrl(order, pricing.stripe_price_id)
+  const [checkoutUrl, priceAmount] = await Promise.all([
+    getOrRefreshCheckoutUrl(order, pricing.stripe_price_id),
+    getPriceAmount(pricing.stripe_price_id),
+  ])
   await replyMessages(replyToken, [
-    { type: "text", text: "น้องมงคลยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว น้องจะสร้างรูปมงคลให้ทันทีเลยค่ะ ✨" },
-    paymentButtonMessage(`ชำระเงิน ${pricing.price} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
+    { type: "text", text: `${BOT_NAME}ยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว น้องจะสร้างรูปมงคลให้ทันทีเลยค่ะ ✨` },
+    paymentButtonMessage(`ชำระเงิน ${priceAmount} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
   ])
 }
 
@@ -114,7 +118,7 @@ export async function handleChat(
     await deactivateSession(session.id, "off_topic_limit");
     await replyText(
       replyToken,
-      "ขออภัยค่ะ น้องมงคลขอจบการสนทนานี้ก่อนนะคะ หากต้องการเริ่มใหม่ พิมพ์ว่า เริ่มใหม่ ได้เลยค่ะ 🙏",
+      `ขออภัยค่ะ ${BOT_NAME}ขอจบการสนทนานี้ก่อนนะคะ หากต้องการเริ่มใหม่ พิมพ์ว่า ${KEYWORDS.RESTART} ได้เลยค่ะ 🙏`,
     );
     return;
   }
@@ -144,11 +148,10 @@ export async function handleChat(
       );
       return;
     }
-    const { url: checkoutUrl, sessionId: stripeSessionId } = await createCheckoutSession(
-      userId,
-      orderNo,
-      pricing.stripe_price_id,
-    )
+    const [{ url: checkoutUrl, sessionId: stripeSessionId }, priceAmount] = await Promise.all([
+      createCheckoutSession(userId, orderNo, pricing.stripe_price_id),
+      getPriceAmount(pricing.stripe_price_id),
+    ])
 
     const order = await createOrder(userId, session.id, orderNo, session.package_key)
     await updateOrder(order.id, { stripe_session_id: stripeSessionId, checkout_url: checkoutUrl })
@@ -157,7 +160,7 @@ export async function handleChat(
 
     await replyMessages(replyToken, [
       { type: "text", text: botResponse.message },
-      paymentButtonMessage(`ชำระเงิน ${pricing.price} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
+      paymentButtonMessage(`ชำระเงิน ${priceAmount} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
     ])
     return;
   }

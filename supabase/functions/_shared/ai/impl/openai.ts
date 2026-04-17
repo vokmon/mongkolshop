@@ -23,6 +23,15 @@ export class OpenAIService implements IAiService {
    * - `responseFormat` — "json" adds response_format: json_object (cannot be combined with webSearch)
    * - `webSearch`      — uses gpt-4o-search-preview + web_search_preview tool; returns plain text only
    */
+  private currentDatetimeContext(): OpenAI.Chat.ChatCompletionMessageParam {
+    const now = new Date().toLocaleString("th-TH", {
+      timeZone: "Asia/Bangkok",
+      dateStyle: "full",
+      timeStyle: "short",
+    })
+    return { role: "system", content: `วันและเวลาปัจจุบัน: ${now}` }
+  }
+
   private async chatCompletion(
     messages: OpenAI.Chat.ChatCompletionMessageParam[],
     options: {
@@ -41,7 +50,7 @@ export class OpenAIService implements IAiService {
 
     const response = await this.client.chat.completions.create({
       model,
-      messages,
+      messages: [this.currentDatetimeContext(), ...messages],
       ...(options.responseFormat === "json"
         ? { response_format: { type: "json_object" } }
         : {}),

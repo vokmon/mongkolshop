@@ -7,6 +7,7 @@ import {
 import { invokeGenerationJob } from "../_shared/generationRouter.ts"
 import { pushImageWithText, pushText } from "../_shared/lineService.ts"
 import { buildWallpaperDeliveryText } from "../_shared/products/wallpaper.ts"
+import { updateSession } from "../_shared/db/userSessions.ts"
 import type { Order, WallpaperGeneratedContent } from "../_shared/types.ts"
 
 const MAX_ATTEMPTS = 5
@@ -80,7 +81,10 @@ async function handleRedeliver(order: Order): Promise<void> {
     const deliveryText = buildWallpaperDeliveryText(content)
 
     await pushImageWithText(order.line_user_id, order.image_url, deliveryText)
-    await updateOrder(order.id, { delivered_at: new Date().toISOString() })
+    await Promise.all([
+      updateOrder(order.id, { delivered_at: new Date().toISOString() }),
+      updateSession(order.session_id, { is_active: false }),
+    ])
     console.log(`✅ Order ${order.order_no} re-delivered`)
   } catch (err) {
     console.error(`❌ Failed to redeliver order ${order.order_no}:`, err)

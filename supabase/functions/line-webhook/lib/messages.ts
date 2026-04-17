@@ -1,4 +1,5 @@
 import type { UserSession, WallpaperCollectedData } from "../../_shared/types.ts"
+import { KEYWORDS } from "../../_shared/constants.ts"
 
 export function buildStatusMessage(session: UserSession): string {
   const stepLabel = session.step <= 6
@@ -11,11 +12,11 @@ export function buildStatusMessage(session: UserSession): string {
 
 export function buildHelpMessage(): string {
   return "คำสั่งที่ใช้ได้ค่ะ:\n\n" +
-    "📋 สถานะ — ดูสถานะการสั่งซื้อ\n" +
-    "🔄 เริ่มใหม่ — เริ่มต้นใหม่\n" +
-    "👤 ดูข้อมูลฉัน — ดูข้อมูลที่เก็บไว้\n" +
-    "🗑️ ลบข้อมูลฉัน — ลบข้อมูลทั้งหมด\n" +
-    "❓ ช่วยด้วย — แสดงเมนูนี้"
+    `📋 ${KEYWORDS.STATUS} — ดูสถานะการสั่งซื้อ\n` +
+    `🔄 ${KEYWORDS.RESTART} — เริ่มต้นใหม่\n` +
+    `👤 ${KEYWORDS.VIEW_DATA} — ดูข้อมูลที่เก็บไว้\n` +
+    `🗑️ ${KEYWORDS.DELETE_DATA} — ลบข้อมูลทั้งหมด\n` +
+    `❓ ${KEYWORDS.HELP[0]} — แสดงเมนูนี้`
 }
 
 export function buildMyDataMessage(session: UserSession): string {

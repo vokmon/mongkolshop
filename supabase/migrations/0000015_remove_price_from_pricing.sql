@@ -1,0 +1,1 @@
+ALTER TABLE pricing DROP COLUMN price;

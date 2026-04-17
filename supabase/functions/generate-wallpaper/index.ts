@@ -122,6 +122,7 @@ async function runGeneration(
       mantra_meaning: fortuneContent.mantra_meaning,
       worship_guide: fortuneContent.worship_guide,
       lucky_colors: fortuneContent.lucky_colors,
+      lucky_number: fortuneContent.lucky_number,
     };
     const deliveryText = buildWallpaperDeliveryText(fortuneContent);
 
@@ -132,7 +133,7 @@ async function runGeneration(
         image_url: imageUrl,
         completed_at: new Date().toISOString(),
       }),
-      updateSession(session.id, { step: 8 }),
+      updateSession(session.id, { step: 8, is_active: false }),
       pushImageWithText(lineUserId, imageUrl, deliveryText),
     ]);
 

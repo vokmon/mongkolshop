@@ -55,7 +55,7 @@ export interface Order {
   order_no: string
   line_user_id: string
   session_id: number
-  price_paid: number
+  price_paid: number | null
 
   // Stripe
   stripe_session_id: string | null
@@ -97,7 +97,6 @@ export interface Pricing {
   id: number
   package_key: string
   name_th: string
-  price: number
   stripe_price_id: string | null
   is_active: boolean
   created_at: string
@@ -135,6 +134,7 @@ export interface GeneratedContent {
   mantra_meaning: string
   worship_guide: string
   lucky_colors: string
+  lucky_number: string
 }
 
 export interface DeityRecommendation {
@@ -162,4 +162,5 @@ export interface WallpaperGeneratedContent {
   mantra_meaning: string
   worship_guide: string
   lucky_colors: string
+  lucky_number: string
 }

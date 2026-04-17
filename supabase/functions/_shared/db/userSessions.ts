@@ -74,16 +74,16 @@ export async function getGhostSessions(days: number): Promise<UserSession[]> {
   return data ?? []
 }
 
-export async function getSessionsForReminder(inactiveHours: number): Promise<UserSession[]> {
+export async function getSessionsForReminder(inactiveHours: number, maxReminders: number): Promise<UserSession[]> {
   // Active sessions that haven't completed data collection (no order yet)
-  // Include reminder_count = 3 so we can deactivate those on this run
+  // Include sessions at maxReminders so we can deactivate those on this run
   const cutoff = new Date(Date.now() - inactiveHours * 60 * 60 * 1000).toISOString()
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("is_active", true)
     .is("current_order_no", null)
-    .lte("reminder_count", 3)
+    .lte("reminder_count", maxReminders)
     .or(`last_reminded_at.is.null,last_reminded_at.lt.${cutoff}`)
   return data ?? []
 }

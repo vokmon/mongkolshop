@@ -1,9 +1,9 @@
 import Stripe from "npm:stripe"
-import { createCheckoutSession } from "../../_shared/checkoutService.ts"
+import { createCheckoutSession, getPriceAmount } from "../../_shared/checkoutService.ts"
 import { updateOrder } from "../../_shared/db/orders.ts"
 import type { Order } from "../../_shared/types.ts"
 
-export { createCheckoutSession }
+export { createCheckoutSession, getPriceAmount }
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
 
