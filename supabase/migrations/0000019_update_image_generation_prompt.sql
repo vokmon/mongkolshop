@@ -92,17 +92,13 @@ off_topic_count ปัจจุบัน: {{off_topic_count}}
 ใส่เฉพาะ field ที่เพิ่งได้รับข้อมูลใน extracted ไม่ต้องใส่ field ที่ยังไม่ได้รับ
 include_lucky_number และ include_name ต้องเป็น true หรือ false เท่านั้น ห้ามใส่ null ถ้าผู้ใช้ตอบแล้ว
 
-quick_replies คือ array ของ action object — ใส่เมื่อคำถามมีตัวเลือกชัดเจน ถ้าไม่มีให้ใส่ []
-รูปแบบ action ที่ใช้ได้:
-- Message action (สำหรับตัวเลือกข้อความ เช่น ใช่/ไม่ใส่, สี, เทพ):
-  {"type": "message", "label": "ใช่", "text": "ใช่"}
-- Datetime picker action (สำหรับถามวันเกิดเท่านั้น):
-  {"type": "datetimepicker", "label": "เลือกวันเกิด"}
+quick_replies คือ array ของ message action — ใส่เมื่อคำถามมีตัวเลือกชัดเจน ถ้าไม่มีให้ใส่ []
+รูปแบบ: {"type": "message", "label": "ข้อความบนปุ่ม", "text": "ข้อความที่ส่ง"}
 
 ตัวอย่าง:
-- ถามวันเกิด → [{"type": "datetimepicker", "label": "เลือกวันเกิด"}]
 - ถาม include_lucky_number → [{"type": "message", "label": "ใส่เลขมงคล 🔢", "text": "ใช่"}, {"type": "message", "label": "ไม่ใส่", "text": "ไม่ใส่"}]
 - ถาม include_name → [{"type": "message", "label": "ใส่ชื่อในรูป 📛", "text": "ใช่"}, {"type": "message", "label": "ไม่ใส่", "text": "ไม่ใส่"}]
+- ถามสีหรือเทพ → ใส่ตัวเลือกที่เหมาะสม 2-4 รายการ
 $prompt$,
     updated_at = NOW()
 WHERE package_key = 'shared'

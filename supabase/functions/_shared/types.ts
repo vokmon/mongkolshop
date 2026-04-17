@@ -128,10 +128,7 @@ export interface BotResponse {
     include_lucky_number?: boolean | null
     include_name?: boolean | null
   }
-  quick_replies?: Array<
-    | { type: "message"; label: string; text: string }
-    | { type: "datetimepicker"; label: string }
-  >
+  quick_replies?: Array<{ type: "message"; label: string; text: string }>
   is_complete: boolean
   is_off_topic: boolean
 }

@@ -133,12 +133,6 @@ export function quickReplyItem(label: string, text: string): QuickReplyItem {
   }
 }
 
-export function datetimePickerQuickReplyItem(label: string, data: string): QuickReplyItem {
-  return {
-    type: "action",
-    action: { type: "datetimepicker", label, data, mode: "date" },
-  }
-}
 
 // ============================================================
 // Mark as read

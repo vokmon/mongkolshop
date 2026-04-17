@@ -64,9 +64,22 @@ export class MockAIService implements IAiService {
       ? `[MOCK] ✨ ขอบคุณค่ะ ได้รับข้อมูลครบแล้ว! กำลังสรุปให้นะคะ`
       : `[MOCK] ขอบคุณค่ะ 😊 ขอทราบ${FIELD_LABELS[nextField]}ของคุณด้วยนะคะ`
 
+    const quick_replies: BotResponse["quick_replies"] = isLastField ? [] : (() => {
+      if (nextField === "include_lucky_number") return [
+        { type: "message", label: "ใส่เลขมงคล 🔢", text: "ใช่" },
+        { type: "message", label: "ไม่ใส่", text: "ไม่ใส่" },
+      ]
+      if (nextField === "include_name") return [
+        { type: "message", label: "ใส่ชื่อในรูป 📛", text: "ใช่" },
+        { type: "message", label: "ไม่ใส่", text: "ไม่ใส่" },
+      ]
+      return []
+    })()
+
     return {
       message,
       extracted,
+      quick_replies,
       is_complete: isLastField,
       is_off_topic: false,
     }

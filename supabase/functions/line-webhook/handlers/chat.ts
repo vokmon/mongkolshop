@@ -5,7 +5,6 @@ import {
   getPricing,
 } from "../../_shared/configService.ts";
 import {
-  datetimePickerQuickReplyItem,
   paymentButtonMessage,
   quickReply,
   quickReplyItem,
@@ -173,11 +172,7 @@ export async function handleChat(
       quickReply(botResponse.message, buildGuidedQuickReplies(stillMissing)),
     ]);
   } else if (botResponse.quick_replies?.length) {
-    const items = botResponse.quick_replies.flatMap((qr) => {
-      if (qr.type === "message") return [quickReplyItem(qr.label, qr.text)]
-      if (qr.type === "datetimepicker") return [datetimePickerQuickReplyItem(qr.label, "action=select_birthdate")]
-      return []  // unknown type — skip silently
-    })
+    const items = botResponse.quick_replies.map((qr) => quickReplyItem(qr.label, qr.text))
     if (items.length > 0) {
       await replyMessages(replyToken, [quickReply(botResponse.message, items)])
     } else {
