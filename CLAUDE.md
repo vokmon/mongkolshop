@@ -166,7 +166,7 @@ All output including mantra must be in Thai (phonetic transliteration for non-Th
 
 ### Reminder Flow
 - Triggers when `current_order_no IS NULL` (data collection not complete) and inactive for `inactive_hours`
-- Max 3 reminders, then session deactivated with `abandoned_reason = 'no_response'`
+- Max 1 reminder (MAX_REMINDERS = 1), then session deactivated with `abandoned_reason = 'no_response'`
 - `last_reminded_at` reset to `null` on every user message (restarts cooldown)
 
 ## Environment Variables
