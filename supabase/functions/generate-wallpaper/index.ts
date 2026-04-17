@@ -9,6 +9,7 @@ import {
 } from "../_shared/db/userSessions.ts";
 import { pushImageWithText, pushText } from "../_shared/lineService.ts";
 import { buildWallpaperDeliveryText } from "../_shared/products/wallpaper.ts";
+import { logCtx } from "../_shared/logger.ts";
 import type { WallpaperGeneratedContent } from "../_shared/types.ts";
 
 const MAX_ATTEMPTS = 5;
@@ -45,7 +46,8 @@ async function runGeneration(
   orderNo: string,
   lineUserId: string,
 ): Promise<void> {
-  console.log(`🎨 Generation started | order: ${orderNo}`);
+  const ctx = logCtx({ userId: lineUserId, orderNo });
+  console.log(`🎨 Starting wallpaper generation${ctx}`);
 
   // ── 1. Load order ────────────────────────────────────────────
   const order = await getOrderByOrderNo(orderNo);
@@ -54,12 +56,13 @@ async function runGeneration(
     return;
   }
   if (order.status !== "paid") {
-    console.log(`⚠️ Order ${orderNo} is ${order.status} — skipping`);
+    console.log(`⚠️ Order not in paid status — skipping${ctx} status:${order.status}`);
     return;
   }
 
   // ── 2+3. Lock order + load session in parallel ───────────────
   const attempt = order.generate_attempts + 1;
+  const ctxA = logCtx({ userId: lineUserId, orderNo, attempt });
   const [, session] = await Promise.all([
     updateOrder(order.id, {
       status: "generating",
@@ -74,23 +77,23 @@ async function runGeneration(
 
     const collected = sessionToCollectedData(session);
     console.log(
-      `📋 Session loaded | deity: ${collected.deity_key ?? "auto"} | color: ${collected.color}`,
+      `📋 Session loaded${ctxA} deity:${collected.deity_key ?? "auto"} color:${collected.color}`,
     );
 
     // ── 4. Recommend deity if not set ─────────────────────────
     let deityKey = collected.deity_key;
     if (!deityKey) {
-      console.log(`🔮 Recommending deity...`);
+      console.log(`🔮 Deity not set — requesting recommendation${ctxA}`);
       const deityPrompt = fillPrompt(await getPrompt("wallpaper", "deity_recommendation"), {
         collected_data: JSON.stringify(collected, null, 2),
       });
       const recommendation = await ai.recommendDeity(deityPrompt);
       deityKey = recommendation.deity;
-      console.log(`✨ Deity recommended: ${deityKey}`);
+      console.log(`✨ Deity recommended: ${deityKey}${ctxA}`);
     }
 
     // ── 5. Generate fortune content ───────────────────────────
-    console.log(`📖 Generating fortune content...`);
+    console.log(`📖 Generating fortune content${ctxA}`);
     const collectedWithDeity = { ...collected, deity_key: deityKey };
     const fortunePrompt = fillPrompt(await getPrompt("wallpaper", "fortune_generation"), {
       collected_data: JSON.stringify(collectedWithDeity, null, 2),
@@ -104,15 +107,15 @@ async function runGeneration(
     });
 
     // ── 7. Generate image ─────────────────────────────────────
-    console.log(`🖼️ Generating image...`);
+    console.log(`🖼️ Generating image${ctxA}`);
     const imageBytes = await ai.createImage(imagePrompt);
 
     // ── 8. Upload to Storage ──────────────────────────────────
-    console.log(`☁️ Uploading to Storage...`);
+    console.log(`☁️ Uploading image to storage${ctxA}`);
     const imageUrl = await uploadImage(lineUserId, orderNo, imageBytes);
 
     // ── 9+10+11. Save content + update session + push to LINE in parallel ──
-    console.log(`📲 Delivering to LINE | user: ${lineUserId}`);
+    console.log(`📲 Delivering result to LINE${ctxA}`);
     const generatedContent: WallpaperGeneratedContent = {
       image_prompt: imagePrompt,
       fortune_text: fortuneContent.fortune_text,
@@ -137,11 +140,11 @@ async function runGeneration(
 
     await updateOrder(order.id, { delivered_at: new Date().toISOString() });
 
-    console.log(`✅ Generation complete | order: ${orderNo}`);
+    console.log(`✅ Generation complete${ctxA}`);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(
-      `❌ Generation failed | order: ${orderNo} | attempt: ${attempt} | error: ${errorMessage}`,
+      `❌ Generation failed${ctxA} error: ${errorMessage}`,
     );
 
     if (attempt >= MAX_ATTEMPTS) {
@@ -155,13 +158,13 @@ async function runGeneration(
         "ขออภัยค่ะ เกิดข้อผิดพลาดในการสร้างรูปมงคล 😔 ทีมงานจะติดต่อกลับเร็วๆ นี้นะคะ 🙏",
       );
       console.log(
-        `🛑 Order ${orderNo} marked as failed after ${attempt} attempts`,
+        `🛑 All retries exhausted — marking as failed${ctx}`,
       );
     } else {
       // Leave in "generating" — stuck-order-check will retry
       await updateOrder(order.id, { last_error: errorMessage });
       console.log(
-        `⏳ Order ${orderNo} will be retried by stuck-order-check (attempt ${attempt}/${MAX_ATTEMPTS})`,
+        `⏳ Will be retried by stuck-order-check${ctxA}/${MAX_ATTEMPTS}`,
       );
     }
   }

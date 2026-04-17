@@ -6,6 +6,7 @@ import {
   updateSession,
 } from "../_shared/db/userSessions.ts";
 import { pushText } from "../_shared/lineService.ts";
+import { logCtx } from "../_shared/logger.ts";
 import { BOT_NAME, KEYWORDS } from "../_shared/constants.ts";
 import type { UserSession } from "../_shared/types.ts";
 
@@ -51,11 +52,10 @@ async function runReminders(inactiveHours: number): Promise<void> {
 }
 
 async function handleReminder(session: UserSession): Promise<void> {
+  const ctx = logCtx({ userId: session.line_user_id, sessionId: session.id })
   try {
     if (session.reminder_count >= MAX_REMINDERS) {
-      console.log(
-        `🛑 Deactivating session ${session.id} after ${MAX_REMINDERS} reminders`,
-      );
+      console.log(`🛑 Max reminders reached — deactivating session${ctx}`);
       await deactivateSession(session.id, "no_response");
       await pushText(
         session.line_user_id,
@@ -78,11 +78,9 @@ async function handleReminder(session: UserSession): Promise<void> {
       last_reminded_at: new Date().toISOString(),
     });
 
-    console.log(
-      `✅ Reminder ${session.reminder_count + 1}/${MAX_REMINDERS} sent | session: ${session.id}`,
-    );
+    console.log(`✅ Reminder ${session.reminder_count + 1}/${MAX_REMINDERS} sent${ctx}`);
   } catch (err) {
-    console.error(`❌ Failed to send reminder for session ${session.id}:`, err);
+    console.error(`❌ Failed to send reminder${ctx}:`, err);
   }
 }
 
@@ -115,6 +113,8 @@ function fieldToThai(field: string): string {
     wish: "ความปรารถนา",
     deity: "เทพ",
     color: "สีที่ชอบ",
+    include_lucky_number: "ใส่เลขมงคลในรูป",
+    include_name: "ใส่ชื่อในรูป",
   };
   return map[field] ?? field;
 }

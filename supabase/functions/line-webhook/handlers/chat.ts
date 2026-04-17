@@ -25,6 +25,7 @@ import {
   extractedToCollected,
 } from "../lib/guided.ts";
 import { formatCollectedData } from "../lib/messages.ts";
+import { logCtx } from "../../_shared/logger.ts";
 import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts";
 import type { ChatMessage, UserSession } from "../../_shared/types.ts";
 
@@ -35,7 +36,7 @@ export async function handleAwaitingPayment(
   replyToken: string,
   session: UserSession,
 ): Promise<void> {
-  console.log(`💳 Awaiting payment reminder | order: ${session.current_order_no}`)
+  console.log(`💳 Sending payment reminder${logCtx({ userId: session.line_user_id, orderNo: session.current_order_no })}`)
   if (!session.current_order_no) {
     await replyText(replyToken, "กำลังรอการชำระเงินอยู่นะคะ หากมีปัญหาพิมพ์ว่า เริ่มใหม่ ได้เลยค่ะ")
     return
@@ -72,7 +73,7 @@ export async function handleChat(
 ): Promise<void> {
   const collected = sessionToCollectedData(session);
   const missing = getMissingFields(collected);
-  console.log(`🤖 Calling AI | session: ${session.id} | missing: [${missing.join(", ") || "none"}]`)
+  console.log(`🤖 Calling AI — missing fields: [${missing.join(", ") || "none"}]${logCtx({ userId, sessionId: session.id })}`)
 
   const systemPrompt = fillPrompt(await getPrompt("wallpaper", "bot_personality"), {
     off_topic_count: String(session.off_topic_count),
@@ -85,7 +86,7 @@ export async function handleChat(
   let botResponse: BotResponse;
   try {
     botResponse = await ai.chatWithBot(systemPrompt, history, userMessage);
-    console.log(`✅ AI response | is_complete: ${botResponse.is_complete} | is_off_topic: ${botResponse.is_off_topic}`)
+    console.log(`✅ AI responded — complete:${botResponse.is_complete} off_topic:${botResponse.is_off_topic}${logCtx({ userId })}`)
   } catch (err) {
     console.error("❌ AI error:", err);
     await replyText(
@@ -112,10 +113,10 @@ export async function handleChat(
 
   const currentOffTopicCount = patch.off_topic_count ?? session.off_topic_count;
   if (botResponse.is_off_topic) {
-    console.log(`🚨 Off-topic count: ${currentOffTopicCount}${currentOffTopicCount >= 5 ? " — guided mode" : ""}`)
+    console.log(`🚨 Off-topic detected${logCtx({ userId })} count:${currentOffTopicCount}${currentOffTopicCount >= 5 ? " — guided mode" : ""}`)
   }
   if (currentOffTopicCount >= 10) {
-    console.log(`🛑 Off-topic limit reached — deactivating session`)
+    console.log(`🛑 Off-topic limit reached — deactivating session${logCtx({ userId })}`)
     await deactivateSession(session.id, "off_topic_limit");
     await replyText(
       replyToken,
@@ -138,7 +139,7 @@ export async function handleChat(
   const mergedCollected = { ...collected, ...extractedToCollected(ex) }
   const stillMissing = getMissingFields(mergedCollected)
   if (botResponse.is_complete && stillMissing.length === 0) {
-    console.log(`🎉 All fields collected — creating order`)
+    console.log(`🎉 All fields collected — creating order${logCtx({ userId, sessionId: session.id })}`)
     const orderNo = generateOrderNo();
     const pricing = await getPricing(session.package_key);
     if (!pricing.stripe_price_id) {
@@ -157,7 +158,7 @@ export async function handleChat(
     const order = await createOrder(userId, session.id, orderNo, session.package_key)
     await updateOrder(order.id, { stripe_session_id: stripeSessionId, checkout_url: checkoutUrl })
     await updateSession(session.id, { status: "awaiting_payment", current_order_no: orderNo })
-    console.log(`📦 Order created: ${orderNo} | Stripe checkout sent`)
+    console.log(`📦 Order created — Stripe checkout sent${logCtx({ userId, orderNo })}`)
 
     await replyMessages(replyToken, [
       { type: "text", text: botResponse.message },

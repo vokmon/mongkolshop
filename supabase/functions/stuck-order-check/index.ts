@@ -8,6 +8,7 @@ import { invokeGenerationJob } from "../_shared/generationRouter.ts"
 import { pushImageWithText, pushText } from "../_shared/lineService.ts"
 import { buildWallpaperDeliveryText } from "../_shared/products/wallpaper.ts"
 import { updateSession } from "../_shared/db/userSessions.ts"
+import { logCtx } from "../_shared/logger.ts"
 import type { Order, WallpaperGeneratedContent } from "../_shared/types.ts"
 
 const MAX_ATTEMPTS = 5
@@ -51,29 +52,31 @@ async function runChecks(): Promise<void> {
 }
 
 async function handleRetry(order: Order): Promise<void> {
-  console.log(`🔁 Retrying order: ${order.order_no} (attempt ${order.generate_attempts})`)
+  console.log(`🔁 Retrying stuck order${logCtx({ userId: order.line_user_id, orderNo: order.order_no, attempt: order.generate_attempts })}`)
   invokeGenerationJob(order)
 }
 
 async function handleZombie(order: Order): Promise<void> {
-  console.log(`💀 Marking zombie order as failed: ${order.order_no}`)
+  const ctx = logCtx({ userId: order.line_user_id, orderNo: order.order_no, attempt: order.generate_attempts })
+  console.log(`💀 Zombie order — all retries exhausted, marking as failed${ctx}`)
   try {
     await updateOrder(order.id, { status: "failed" })
     await pushText(
       order.line_user_id,
       "ขออภัยค่ะ เกิดข้อผิดพลาดในการสร้างรูปมงคล 😔 ทีมงานจะติดต่อกลับเร็วๆ นี้นะคะ 🙏",
     )
-    console.log(`🛑 Order ${order.order_no} marked as failed`)
+    console.log(`🛑 Zombie order marked as failed${logCtx({ userId: order.line_user_id, orderNo: order.order_no })}`)
   } catch (err) {
-    console.error(`❌ Failed to handle zombie order ${order.order_no}:`, err)
+    console.error(`❌ Failed to handle zombie order${ctx}:`, err)
   }
 }
 
 async function handleRedeliver(order: Order): Promise<void> {
-  console.log(`📲 Re-delivering order: ${order.order_no}`)
+  const ctx = logCtx({ userId: order.line_user_id, orderNo: order.order_no })
+  console.log(`📲 Re-delivering undelivered order${ctx}`)
   try {
     if (!order.image_url || !order.generated_content) {
-      console.error(`❌ Order ${order.order_no} missing image_url or generated_content — cannot redeliver`)
+      console.error(`❌ Missing image_url or generated_content — cannot redeliver${ctx}`)
       return
     }
 
@@ -85,9 +88,9 @@ async function handleRedeliver(order: Order): Promise<void> {
       updateOrder(order.id, { delivered_at: new Date().toISOString() }),
       updateSession(order.session_id, { is_active: false }),
     ])
-    console.log(`✅ Order ${order.order_no} re-delivered`)
+    console.log(`✅ Order re-delivered${ctx}`)
   } catch (err) {
-    console.error(`❌ Failed to redeliver order ${order.order_no}:`, err)
+    console.error(`❌ Failed to redeliver order${ctx}:`, err)
   }
 }
 

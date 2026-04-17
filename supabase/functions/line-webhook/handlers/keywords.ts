@@ -11,6 +11,7 @@ import {
   buildMyDataMessage,
   buildStatusMessage,
 } from "../lib/messages.ts";
+import { logCtx } from "../../_shared/logger.ts";
 import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts";
 import type { UserSession } from "../../_shared/types.ts";
 
@@ -23,18 +24,18 @@ export async function handleSpecialKeyword(
   const t = text.trim();
 
   if (t === KEYWORDS.STATUS) {
-    console.log(`📋 Keyword: ${KEYWORDS.STATUS} | user: ${userId}`);
+    console.log(`📋 Status requested${logCtx({ userId })}`);
     await replyText(replyToken, buildStatusMessage(session));
     return true;
   }
 
   if (t === KEYWORDS.RESTART) {
-    console.log(`🔄 Keyword: ${KEYWORDS.RESTART} | user: ${userId}`);
+    console.log(`🔄 Restart requested${logCtx({ userId })}`);
     if (session.current_order_no) {
       const order = await getOrderByOrderNo(session.current_order_no);
       if (order && (order.status === "paid" || order.status === "generating")) {
         console.log(
-          `⏳ Reset blocked — order ${order.order_no} is ${order.status}`,
+          `⏳ Restart blocked — order in progress${logCtx({ userId, orderNo: order.order_no })} status:${order.status}`,
         );
         await replyText(
           replyToken,
@@ -54,24 +55,24 @@ export async function handleSpecialKeyword(
   }
 
   if (KEYWORDS.HELP.includes(t.trim().toLowerCase())) {
-    console.log(`❓ Keyword: ${KEYWORDS.HELP[0]} | user: ${userId}`);
+    console.log(`❓ Help requested${logCtx({ userId })}`);
     await replyText(replyToken, buildHelpMessage());
     return true;
   }
 
   if (t === KEYWORDS.VIEW_DATA) {
-    console.log(`👤 Keyword: ${KEYWORDS.VIEW_DATA} | user: ${userId}`);
+    console.log(`👤 View data requested${logCtx({ userId })}`);
     await replyText(replyToken, buildMyDataMessage(session));
     return true;
   }
 
   if (t === KEYWORDS.DELETE_DATA) {
-    console.log(`🗑️ Keyword: ${KEYWORDS.DELETE_DATA} | user: ${userId}`);
+    console.log(`🗑️ Delete data requested${logCtx({ userId })}`);
     if (session.current_order_no) {
       const order = await getOrderByOrderNo(session.current_order_no);
       if (order && (order.status === "paid" || order.status === "generating")) {
         console.log(
-          `⏳ Deletion blocked — order ${order.order_no} is ${order.status}`,
+          `⏳ Delete data blocked — order in progress${logCtx({ userId, orderNo: order.order_no })} status:${order.status}`,
         );
         await replyText(
           replyToken,
