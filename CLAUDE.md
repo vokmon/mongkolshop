@@ -86,7 +86,7 @@ docs/                   # Planning documents (read-only reference)
 1. LINE sends webhook → `line-webhook/index.ts`
 2. Check `user_consents` (PDPA) → if not accepted, send consent message + save `display_name`
 3. Check special keywords (`สถานะ`, `เริ่มใหม่`, `ช่วยด้วย`, etc.) → handle immediately
-4. If `step = 7` (awaiting Stripe payment) → reply with payment reminder + refresh link if expired
+4. If `status = 'awaiting_payment'` → reply with payment reminder + refresh link if expired
 5. Send message + last 20 conversation history to GPT-4o with `bot_personality` prompt
 6. GPT returns `{ message, extracted, is_complete, is_off_topic }` as JSON
 7. Merge extracted fields into `user_sessions.collected_data` JSONB, reset `last_reminded_at = null`
@@ -125,7 +125,7 @@ docs/                   # Planning documents (read-only reference)
 | Table | Purpose |
 |---|---|
 | `user_consents` | PDPA — one row per LINE user, tracks acceptance/withdrawal, stores `display_name` |
-| `user_sessions` | Conversation state — step (0–8), `collected_data` JSONB, history, `package_key`, reminder tracking |
+| `user_sessions` | Conversation state — `status` (collecting/awaiting_payment/done), `collected_data` JSONB, history, `package_key`, reminder tracking |
 | `orders` | Payment + generation lifecycle — `generated_content` JSONB, `image_url`, `package_key`, `promotion_code`, `discount_amount`, status: pending→paid→generating→done\|failed |
 | `prompts` | AI prompt templates — scoped by `package_key` (`shared` or `wallpaper`), unique on `(package_key, prompt_key)` |
 | `pricing` | Package config per `package_key` — price, stripe_price_id |
@@ -155,11 +155,10 @@ Prompts support three traditions — examples only, GPT may recommend beyond the
 
 All output including mantra must be in Thai (phonetic transliteration for non-Thai scripts).
 
-### Session Steps
-- `0`: Session created, no activity yet
-- `1–6`: Conversational collection of 5 fields (GPT-controlled)
-- `7`: Awaiting Stripe payment
-- `8`: Done — image delivered
+### Session Status
+- `collecting`: GPT is collecting data (default)
+- `awaiting_payment`: all fields collected, Stripe payment pending
+- `done`: image delivered, session deactivated
 
 ### Off-topic Escalation
 - Count 1–2: soft redirect | 3–4: direct redirect | 5+: guided mode (quick reply buttons) | 10+: deactivate session

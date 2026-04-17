@@ -7,6 +7,8 @@ const FIELD_LABELS: Record<string, string> = {
   wish: "ความปรารถนา",
   deity: "เทพที่ต้องการ",
   color: "สีที่ชอบ",
+  include_lucky_number: "ต้องการใส่เลขมงคลในรูปไหมคะ (ใช่/ไม่ใส่)",
+  include_name: "ต้องการให้ใส่ชื่อในรูปไหมคะ (ใช่/ไม่ใส่)",
 }
 
 export class MockAIService implements IAiService {
@@ -55,6 +57,8 @@ export class MockAIService implements IAiService {
     else if (field === "wish") extracted.wish = userMessage
     else if (field === "deity") extracted.deity = userMessage
     else if (field === "color") extracted.color = userMessage
+    else if (field === "include_lucky_number") extracted.include_lucky_number = true
+    else if (field === "include_name") extracted.include_name = true
 
     const message = isLastField
       ? `[MOCK] ✨ ขอบคุณค่ะ ได้รับข้อมูลครบแล้ว! กำลังสรุปให้นะคะ`

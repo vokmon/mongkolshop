@@ -23,19 +23,19 @@ export async function handleMessage(userId: string, replyToken: string, text: st
     const profile = await getUserProfile(userId)
     session = await createSession(userId, profile?.displayName ?? null)
   } else {
-    console.log(`📋 Active session found: id=${session.id} step=${session.step}`)
+    console.log(`📋 Active session found: id=${session.id} status=${session.status}`)
   }
 
   if (await handleSpecialKeyword(userId, replyToken, text, session)) return
 
-  if (session.step === 7) {
-    console.log(`💳 Step 7 — awaiting payment`)
+  if (session.status === "awaiting_payment") {
+    console.log(`💳 Awaiting payment`)
     await handleAwaitingPayment(replyToken, session)
     return
   }
 
-  if (session.step === 8) {
-    console.log(`✅ Step 8 — order already done`)
+  if (session.status === "done") {
+    console.log(`✅ Session done — order already delivered`)
     await replyText(replyToken, "คุณได้รับรูปมงคลแล้วนะคะ ✨ หากต้องการสั่งใหม่ พิมพ์ว่า เริ่มใหม่ ได้เลยค่ะ")
     return
   }

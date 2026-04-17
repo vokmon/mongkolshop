@@ -8,6 +8,8 @@ export function buildGuidedQuickReplies(missingFields: string[]) {
     wish: ["บอกความปรารถนา 🙏", "ฉันอยากได้"],
     deity: ["เลือกเทพ ✨", "ขอเทพ"],
     color: ["เลือกสี 🎨", "สีที่ชอบคือ"],
+    include_lucky_number: ["ใส่เลขมงคลในรูป 🔢", "อยากใส่เลขมงคลในรูป"],
+    include_name: ["ใส่ชื่อในรูป 📛", "อยากให้ใส่ชื่อในรูป"],
   }
   // LINE quick reply max 13 items; show only missing fields (max 5)
   return missingFields.slice(0, 5).map((field) => {
@@ -26,5 +28,7 @@ export function extractedToCollected(ex: BotResponse["extracted"]): Partial<Wall
     result.deity_source = "user"
   }
   if (ex.color != null) result.color = ex.color
+  if (ex.include_lucky_number != null) result.include_lucky_number = ex.include_lucky_number
+  if (ex.include_name != null) result.include_name = ex.include_name
   return result
 }

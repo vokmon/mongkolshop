@@ -2,6 +2,7 @@ import { verifySignature } from "../_shared/lineService.ts"
 import { getActiveSession, deactivateSession } from "../_shared/db/userSessions.ts"
 import { handleFollow } from "./handlers/follow.ts"
 import { handleMessage } from "./handlers/message.ts"
+import { handlePostback } from "./handlers/postback.ts"
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 })
@@ -46,6 +47,11 @@ async function handleEvent(event: LineEvent): Promise<void> {
     await handleMessage(event.source.userId, event.replyToken, text)
     return
   }
+
+  if (event.type === "postback") {
+    await handlePostback(event.source.userId, event.replyToken, event.postback.data, event.postback.params ?? {})
+    return
+  }
 }
 
 interface LineEvent {
@@ -53,4 +59,5 @@ interface LineEvent {
   replyToken: string
   source: { userId: string }
   message: { type: string; text: string }
+  postback: { data: string; params: Record<string, string> }
 }

@@ -27,7 +27,7 @@ export async function createSession(
 ): Promise<UserSession> {
   const { data, error } = await getClient()
     .from("user_sessions")
-    .insert({ line_user_id: lineUserId, display_name: displayName, package_key: packageKey })
+    .insert({ line_user_id: lineUserId, display_name: displayName, package_key: packageKey, status: "collecting" })
     .select()
     .single()
   if (error) throw error
@@ -37,7 +37,7 @@ export async function createSession(
 export async function updateSession(
   sessionId: number,
   patch: Partial<Pick<UserSession,
-    | "step"
+    | "status"
     | "collected_data"
     | "conversation_history"
     | "current_order_no"
@@ -129,6 +129,8 @@ export function sessionToCollectedData(session: UserSession): WallpaperCollected
     deity_key: d.deity_key ?? null,
     deity_source: d.deity_source ?? null,
     color: d.color ?? null,
+    include_lucky_number: d.include_lucky_number ?? null,
+    include_name: d.include_name ?? null,
   }
 }
 
@@ -139,5 +141,7 @@ export function getMissingFields(data: WallpaperCollectedData): string[] {
   if (!data.wish) missing.push("wish")
   if (!data.deity_key) missing.push("deity")
   if (!data.color) missing.push("color")
+  if (data.include_lucky_number == null) missing.push("include_lucky_number")
+  if (data.include_name == null) missing.push("include_name")
   return missing
 }

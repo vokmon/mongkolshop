@@ -5,8 +5,10 @@ import {
   getPricing,
 } from "../../_shared/configService.ts";
 import {
+  datetimePickerQuickReplyItem,
   paymentButtonMessage,
   quickReply,
+  quickReplyItem,
   replyMessages,
   replyText,
 } from "../../_shared/lineService.ts";
@@ -155,7 +157,7 @@ export async function handleChat(
 
     const order = await createOrder(userId, session.id, orderNo, session.package_key)
     await updateOrder(order.id, { stripe_session_id: stripeSessionId, checkout_url: checkoutUrl })
-    await updateSession(session.id, { step: 7, current_order_no: orderNo })
+    await updateSession(session.id, { status: "awaiting_payment", current_order_no: orderNo })
     console.log(`📦 Order created: ${orderNo} | Stripe checkout sent`)
 
     await replyMessages(replyToken, [
@@ -166,11 +168,21 @@ export async function handleChat(
   }
 
   // Guided mode — append quick reply buttons for missing fields
-  const updatedMissing = stillMissing;
   if (session.chat_mode === "guided" || patch.chat_mode === "guided") {
     await replyMessages(replyToken, [
-      quickReply(botResponse.message, buildGuidedQuickReplies(updatedMissing)),
+      quickReply(botResponse.message, buildGuidedQuickReplies(stillMissing)),
     ]);
+  } else if (botResponse.quick_replies?.length) {
+    const items = botResponse.quick_replies.flatMap((qr) => {
+      if (qr.type === "message") return [quickReplyItem(qr.label, qr.text)]
+      if (qr.type === "datetimepicker") return [datetimePickerQuickReplyItem(qr.label, "action=select_birthdate")]
+      return []  // unknown type — skip silently
+    })
+    if (items.length > 0) {
+      await replyMessages(replyToken, [quickReply(botResponse.message, items)])
+    } else {
+      await replyText(replyToken, botResponse.message)
+    }
   } else {
     await replyText(replyToken, botResponse.message);
   }

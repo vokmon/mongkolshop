@@ -98,8 +98,9 @@ async function runGeneration(
     const fortuneContent = await ai.generateContent(fortunePrompt);
 
     // ── 6. Fill image prompt ──────────────────────────────────
+    const imageData = { ...collectedWithDeity, lucky_number: fortuneContent.lucky_number }
     const imagePrompt = fillPrompt(await getPrompt("wallpaper", "image_generation"), {
-      collected_data: JSON.stringify(collectedWithDeity, null, 2),
+      collected_data: JSON.stringify(imageData, null, 2),
     });
 
     // ── 7. Generate image ─────────────────────────────────────
@@ -130,7 +131,7 @@ async function runGeneration(
         image_url: imageUrl,
         completed_at: new Date().toISOString(),
       }),
-      updateSession(session.id, { step: 8, is_active: false }),
+      updateSession(session.id, { status: "done", is_active: false }),
       pushImageWithText(lineUserId, imageUrl, deliveryText),
     ]);
 

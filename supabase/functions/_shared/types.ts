@@ -19,7 +19,7 @@ export interface UserSession {
   id: number
   line_user_id: string
   display_name: string | null
-  step: number
+  status: SessionStatus
   is_active: boolean
 
   // Collected fields — stored as JSONB, cast to product-specific type (e.g. WallpaperCollectedData)
@@ -47,6 +47,8 @@ export interface UserSession {
   created_at: string
   updated_at: string
 }
+
+export type SessionStatus = "collecting" | "awaiting_payment" | "done"
 
 export type OrderStatus = "pending" | "paid" | "generating" | "done" | "failed"
 
@@ -123,7 +125,13 @@ export interface BotResponse {
     wish?: string | null
     deity?: string | null
     color?: string | null
+    include_lucky_number?: boolean | null
+    include_name?: boolean | null
   }
+  quick_replies?: Array<
+    | { type: "message"; label: string; text: string }
+    | { type: "datetimepicker"; label: string }
+  >
   is_complete: boolean
   is_off_topic: boolean
 }
@@ -153,6 +161,8 @@ export interface WallpaperCollectedData {
   deity_key: string | null
   deity_source: "auto" | "user" | null
   color: string | null
+  include_lucky_number: boolean | null
+  include_name: boolean | null
 }
 
 export interface WallpaperGeneratedContent {

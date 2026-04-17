@@ -2,12 +2,11 @@ import type { UserSession, WallpaperCollectedData } from "../../_shared/types.ts
 import { KEYWORDS } from "../../_shared/constants.ts"
 
 export function buildStatusMessage(session: UserSession): string {
-  const stepLabel = session.step <= 6
-    ? "กำลังเก็บข้อมูล 📝"
-    : session.step === 7
-    ? "รอการชำระเงิน 💳"
-    : "เสร็จสิ้น ✅"
-  return `สถานะของคุณ: ${stepLabel}\nOrder: ${session.current_order_no ?? "-"}`
+  const label =
+    session.status === "awaiting_payment" ? "รอการชำระเงิน 💳" :
+    session.status === "done"             ? "เสร็จสิ้น ✅" :
+                                            "กำลังเก็บข้อมูล 📝"
+  return `สถานะของคุณ: ${label}\nOrder: ${session.current_order_no ?? "-"}`
 }
 
 export function buildHelpMessage(): string {
@@ -21,12 +20,16 @@ export function buildHelpMessage(): string {
 
 export function buildMyDataMessage(session: UserSession): string {
   const d = session.collected_data as Partial<WallpaperCollectedData>
+  const boolLabel = (v: boolean | null | undefined) =>
+    v == null ? "-" : v ? "ใช่" : "ไม่ใส่"
   return "ข้อมูลของคุณที่เก็บไว้:\n\n" +
     `👤 ชื่อ: ${d.full_name ?? "-"}\n` +
     `🎂 วันเกิด: ${d.birthdate ?? "-"}\n` +
     `🙏 ความปรารถนา: ${d.wish ?? "-"}\n` +
     `✨ เทพ: ${d.deity_key ?? "-"}\n` +
-    `🎨 สี: ${d.color ?? "-"}`
+    `🎨 สี: ${d.color ?? "-"}\n` +
+    `🔢 ใส่เลขมงคลในรูป: ${boolLabel(d.include_lucky_number)}\n` +
+    `📛 ใส่ชื่อในรูป: ${boolLabel(d.include_name)}`
 }
 
 export function formatCollectedData(data: WallpaperCollectedData): string {
