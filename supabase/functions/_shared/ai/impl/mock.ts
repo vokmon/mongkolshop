@@ -79,6 +79,7 @@ export class MockAIService implements IAiService {
       mantra_meaning: "[MOCK] ข้าพเจ้าน้อมบูชาพระพิฆเนศ ผู้ขจัดอุปสรรคทั้งปวง",
       worship_guide: "[MOCK] สวดคาถา 9 จบ ทุกเช้าวันพุธ จุดธูป 3 ดอก และดอกดาวเรือง",
       lucky_colors: "[MOCK] ทอง เหลือง เขียว",
+      lucky_number: "459",
     }
   }
 
