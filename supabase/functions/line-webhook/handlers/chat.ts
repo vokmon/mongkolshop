@@ -14,8 +14,6 @@ import {
 import {
   deactivateSession,
   generateOrderNo,
-  getMissingFields,
-  sessionToCollectedData,
   updateSession,
 } from "../../_shared/db/userSessions.ts";
 import { createOrder, getOrderByOrderNo, updateOrder } from "../../_shared/db/orders.ts";
@@ -24,7 +22,7 @@ import {
   buildGuidedQuickReplies,
   extractedToCollected,
 } from "../lib/guided.ts";
-import { formatCollectedData } from "../lib/messages.ts";
+import { getProduct } from "../../_shared/products/index.ts";
 import { logCtx } from "../../_shared/logger.ts";
 import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts";
 import type { ChatMessage, UserSession } from "../../_shared/types.ts";
@@ -60,8 +58,8 @@ export async function handleAwaitingPayment(
     getPriceAmount(pricing.stripe_price_id),
   ])
   await replyMessages(replyToken, [
-    { type: "text", text: `${BOT_NAME}ยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว น้องจะสร้างรูปมงคลให้ทันทีเลยค่ะ ✨` },
-    paymentButtonMessage(`ชำระเงิน ${priceAmount} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
+    { type: "text", text: `${BOT_NAME}ยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว ${BOT_NAME}จะดำเนินการทันทีเลยค่ะ ✨` },
+    paymentButtonMessage(`รอการชำระเงินอยู่นะคะ 🙏 กรุณาชำระ ${priceAmount} บาท เพื่อดำเนินการสร้าง${pricing.name_th}ของคุณได้เลยค่ะ ✨`, checkoutUrl, priceAmount),
   ])
 }
 
@@ -71,13 +69,14 @@ export async function handleChat(
   userMessage: string,
   session: UserSession,
 ): Promise<void> {
-  const collected = sessionToCollectedData(session);
-  const missing = getMissingFields(collected);
+  const product = getProduct(session.package_key)
+  const collected = product.sessionToCollectedData(session);
+  const missing = product.getMissingFields(collected);
   console.log(`🤖 Calling AI — missing fields: [${missing.join(", ") || "none"}]${logCtx({ userId, sessionId: session.id })}`)
 
-  const systemPrompt = fillPrompt(await getPrompt("wallpaper", "bot_personality"), {
+  const systemPrompt = fillPrompt(await getPrompt(session.package_key, "bot_personality"), {
     off_topic_count: String(session.off_topic_count),
-    current_data: formatCollectedData(collected),
+    current_data: getProduct(session.package_key).formatCollectedData(collected),
     missing_fields: missing.join(", "),
   });
 
@@ -100,7 +99,7 @@ export async function handleChat(
   // Reset last_reminded_at so the 2h reminder cooldown restarts from this message
   const patch: Partial<UserSession> = { last_reminded_at: null };
   const ex = botResponse.extracted;
-  const extractedFields = extractedToCollected(ex)
+  const extractedFields = extractedToCollected(ex, session.package_key)
   if (Object.keys(extractedFields).length > 0) {
     patch.collected_data = { ...collected, ...extractedFields }
   }
@@ -136,8 +135,8 @@ export async function handleChat(
   await updateSession(session.id, patch);
 
   // Complete — verify all fields present server-side before creating order
-  const mergedCollected = { ...collected, ...extractedToCollected(ex) }
-  const stillMissing = getMissingFields(mergedCollected)
+  const mergedCollected = { ...collected, ...extractedToCollected(ex, session.package_key) }
+  const stillMissing = product.getMissingFields(mergedCollected)
   if (botResponse.is_complete && stillMissing.length === 0) {
     console.log(`🎉 All fields collected — creating order${logCtx({ userId, sessionId: session.id })}`)
     const orderNo = generateOrderNo();
@@ -162,7 +161,7 @@ export async function handleChat(
 
     await replyMessages(replyToken, [
       { type: "text", text: botResponse.message },
-      paymentButtonMessage(`ชำระเงิน ${priceAmount} บาท เพื่อรับรูปมงคลของคุณค่ะ`, checkoutUrl),
+      paymentButtonMessage(`ข้อมูลครบแล้วค่ะ ✨ กรุณาชำระ ${priceAmount} บาท เพื่อเริ่มสร้าง${pricing.name_th}ของคุณได้เลยนะคะ 🙏`, checkoutUrl, priceAmount),
     ])
     return;
   }
@@ -170,7 +169,7 @@ export async function handleChat(
   // Guided mode — append quick reply buttons for missing fields
   if (session.chat_mode === "guided" || patch.chat_mode === "guided") {
     await replyMessages(replyToken, [
-      quickReply(botResponse.message, buildGuidedQuickReplies(stillMissing)),
+      quickReply(botResponse.message, buildGuidedQuickReplies(stillMissing, session.package_key)),
     ]);
   } else if (botResponse.quick_replies?.length) {
     const items = botResponse.quick_replies.map((qr) => quickReplyItem(qr.label, qr.text))

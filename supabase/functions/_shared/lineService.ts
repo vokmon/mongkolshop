@@ -100,7 +100,7 @@ export async function pushImageWithText(
 // ============================================================
 
 /** A card message with a single tappable button that opens a URL. */
-export function paymentButtonMessage(text: string, checkoutUrl: string): LineMessage {
+export function paymentButtonMessage(text: string, checkoutUrl: string, priceAmount: number | string): LineMessage {
   return {
     type: "template",
     altText: text,
@@ -108,7 +108,7 @@ export function paymentButtonMessage(text: string, checkoutUrl: string): LineMes
       type: "buttons",
       text,
       actions: [
-        { type: "uri", label: "💳 ชำระเงินเลย", uri: checkoutUrl },
+        { type: "uri", label: `💳 ชำระ ${priceAmount} บาท`, uri: checkoutUrl },
       ],
     },
   }

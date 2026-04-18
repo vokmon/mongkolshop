@@ -1,4 +1,5 @@
-import type { UserSession, WallpaperCollectedData } from "../../_shared/types.ts"
+import type { UserSession } from "../../_shared/types.ts"
+import { getProduct } from "../../_shared/products/index.ts"
 import { KEYWORDS } from "../../_shared/constants.ts"
 
 export function buildStatusMessage(session: UserSession): string {
@@ -19,25 +20,5 @@ export function buildHelpMessage(): string {
 }
 
 export function buildMyDataMessage(session: UserSession): string {
-  const d = session.collected_data as Partial<WallpaperCollectedData>
-  const boolLabel = (v: boolean | null | undefined) =>
-    v == null ? "-" : v ? "ใช่" : "ไม่ใส่"
-  return "ข้อมูลของคุณที่เก็บไว้:\n\n" +
-    `👤 ชื่อ: ${d.full_name ?? "-"}\n` +
-    `🎂 วันเกิด: ${d.birthdate ?? "-"}\n` +
-    `🙏 ความปรารถนา: ${d.wish ?? "-"}\n` +
-    `✨ เทพ: ${d.deity_key ?? "-"}\n` +
-    `🎨 สี: ${d.color ?? "-"}\n` +
-    `🔢 ใส่เลขมงคลในรูป: ${boolLabel(d.include_lucky_number)}\n` +
-    `📛 ใส่ชื่อในรูป: ${boolLabel(d.include_name)}`
-}
-
-export function formatCollectedData(data: WallpaperCollectedData): string {
-  const lines: string[] = []
-  if (data.full_name) lines.push(`ชื่อ: ${data.full_name}`)
-  if (data.birthdate) lines.push(`วันเกิด: ${data.birthdate}`)
-  if (data.wish) lines.push(`ความปรารถนา: ${data.wish}`)
-  if (data.deity_key) lines.push(`เทพ: ${data.deity_key}`)
-  if (data.color) lines.push(`สี: ${data.color}`)
-  return lines.length > 0 ? lines.join("\n") : "ยังไม่มีข้อมูล"
+  return getProduct(session.package_key).buildMyDataMessage(session)
 }

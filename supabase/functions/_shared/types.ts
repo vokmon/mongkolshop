@@ -101,6 +101,7 @@ export interface Pricing {
   name_th: string
   stripe_price_id: string | null
   is_active: boolean
+  entry_keywords: string[]
   created_at: string
 }
 

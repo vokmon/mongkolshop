@@ -47,6 +47,6 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session): P
       type: "text",
       text: `ลิงก์ชำระเงินหมดอายุแล้วค่ะ 😅 ${BOT_NAME}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨\nหรือพิมพ์ว่า ${KEYWORDS.RESTART} หากต้องการเปลี่ยนข้อมูลค่ะ 🙏`,
     },
-    paymentButtonMessage(`ชำระเงิน ${priceAmount} บาท เพื่อรับรูปมงคลของคุณค่ะ`, newCheckoutUrl),
+    paymentButtonMessage(`ลิงก์เดิมหมดอายุแล้วค่ะ 😅 ${BOT_NAME}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨ กรุณาชำระ ${priceAmount} บาท ได้เลยค่ะ 🙏`, newCheckoutUrl, priceAmount),
   ])
 }

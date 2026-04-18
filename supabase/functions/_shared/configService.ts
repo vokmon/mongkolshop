@@ -1,5 +1,5 @@
 import { getAllPrompts } from "./db/prompts.ts"
-import { getActivePricingByKey } from "./db/pricing.ts"
+import { getActivePricingByKey, getAllActivePricing } from "./db/pricing.ts"
 import type { Pricing, Prompt } from "./types.ts"
 
 // In-memory cache — lives for the lifetime of the Edge Function instance
@@ -21,6 +21,10 @@ export async function getPricing(packageKey: string): Promise<Pricing> {
   const row = await getActivePricingByKey(packageKey)
   if (!row) throw new Error(`No active pricing found for package: ${packageKey}`)
   return row
+}
+
+export async function getAllPricing(): Promise<Pricing[]> {
+  return getAllActivePricing()
 }
 
 /** Fill {{placeholder}} variables in a prompt template */

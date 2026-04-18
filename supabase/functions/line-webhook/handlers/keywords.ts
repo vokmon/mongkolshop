@@ -6,6 +6,7 @@ import {
   wipeUserSessionData,
 } from "../../_shared/db/userSessions.ts";
 import { getOrderByOrderNo } from "../../_shared/db/orders.ts";
+import { getPricing } from "../../_shared/configService.ts";
 import {
   buildHelpMessage,
   buildMyDataMessage,
@@ -37,19 +38,25 @@ export async function handleSpecialKeyword(
         console.log(
           `⏳ Restart blocked — order in progress${logCtx({ userId, orderNo: order.order_no })} status:${order.status}`,
         );
+        const pricing = await getPricing(session.package_key);
         await replyText(
           replyToken,
-          "รูปมงคลของคุณกำลังถูกสร้างอยู่นะคะ ✨ กรุณารอสักครู่ แล้วจะส่งให้ทาง LINE นี้เลยค่ะ 🙏",
+          `${pricing.name_th}ของคุณกำลังถูกสร้างอยู่นะคะ ✨ กรุณารอสักครู่ แล้วจะส่งให้ทาง LINE นี้เลยค่ะ 🙏`,
         );
         return true;
       }
     }
     await deactivateSession(session.id, "user_reset");
     const profile = await getUserProfile(userId);
-    await createSession(userId, profile?.displayName ?? null);
+    await createSession(userId, profile?.displayName ?? null, session.package_key);
+    let productName = "";
+    try {
+      const pricing = await getPricing(session.package_key);
+      productName = pricing.name_th;
+    } catch { /* pricing row missing — fall back to generic message */ }
     await replyText(
       replyToken,
-      `เริ่มต้นใหม่แล้วค่ะ ✨ ${BOT_NAME}พร้อมช่วยสร้างรูปมงคลให้คุณใหม่เลยนะคะ`,
+      `เริ่มต้นใหม่แล้วค่ะ ✨ ${BOT_NAME}พร้อมช่วย${productName ? `สร้าง${productName}` : "เหลือคุณ"}ใหม่เลยนะคะ`,
     );
     return true;
   }
@@ -74,9 +81,10 @@ export async function handleSpecialKeyword(
         console.log(
           `⏳ Delete data blocked — order in progress${logCtx({ userId, orderNo: order.order_no })} status:${order.status}`,
         );
+        const pricing = await getPricing(session.package_key);
         await replyText(
           replyToken,
-          "รูปมงคลของคุณกำลังถูกสร้างอยู่นะคะ ✨ กรุณารอรับรูปก่อน แล้วค่อยลบข้อมูลได้เลยนะคะ 🙏",
+          `${pricing.name_th}ของคุณกำลังถูกสร้างอยู่นะคะ ✨ กรุณารอรับก่อน แล้วค่อยลบข้อมูลได้เลยนะคะ 🙏`,
         );
         return true;
       }

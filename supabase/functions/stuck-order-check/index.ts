@@ -5,11 +5,11 @@ import {
   updateOrder,
 } from "../_shared/db/orders.ts"
 import { invokeGenerationJob } from "../_shared/generationRouter.ts"
-import { pushImageWithText, pushText } from "../_shared/lineService.ts"
-import { buildWallpaperDeliveryText } from "../_shared/products/wallpaper.ts"
+import { pushText } from "../_shared/lineService.ts"
+import { getProduct } from "../_shared/products/index.ts"
 import { updateSession } from "../_shared/db/userSessions.ts"
 import { logCtx } from "../_shared/logger.ts"
-import type { Order, WallpaperGeneratedContent } from "../_shared/types.ts"
+import type { Order } from "../_shared/types.ts"
 
 const MAX_ATTEMPTS = 5
 
@@ -61,10 +61,7 @@ async function handleZombie(order: Order): Promise<void> {
   console.log(`💀 Zombie order — all retries exhausted, marking as failed${ctx}`)
   try {
     await updateOrder(order.id, { status: "failed" })
-    await pushText(
-      order.line_user_id,
-      "ขออภัยค่ะ เกิดข้อผิดพลาดในการสร้างรูปมงคล 😔 ทีมงานจะติดต่อกลับเร็วๆ นี้นะคะ 🙏",
-    )
+    await pushText(order.line_user_id, getProduct(order.package_key).buildGenerationFailedMessage())
     console.log(`🛑 Zombie order marked as failed${logCtx({ userId: order.line_user_id, orderNo: order.order_no })}`)
   } catch (err) {
     console.error(`❌ Failed to handle zombie order${ctx}:`, err)
@@ -75,15 +72,7 @@ async function handleRedeliver(order: Order): Promise<void> {
   const ctx = logCtx({ userId: order.line_user_id, orderNo: order.order_no })
   console.log(`📲 Re-delivering undelivered order${ctx}`)
   try {
-    if (!order.image_url || !order.generated_content) {
-      console.error(`❌ Missing image_url or generated_content — cannot redeliver${ctx}`)
-      return
-    }
-
-    const content = order.generated_content as WallpaperGeneratedContent
-    const deliveryText = buildWallpaperDeliveryText(content)
-
-    await pushImageWithText(order.line_user_id, order.image_url, deliveryText)
+    await getProduct(order.package_key).deliver(order.line_user_id, order)
     await Promise.all([
       updateOrder(order.id, { delivered_at: new Date().toISOString() }),
       updateSession(order.session_id, { is_active: false }),

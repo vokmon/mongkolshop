@@ -1,7 +1,6 @@
 import { getPrompt } from "../../_shared/configService.ts"
 import { getUserProfile, quickReply, quickReplyItem, replyMessages, replyText } from "../../_shared/lineService.ts"
 import { upsertConsent } from "../../_shared/db/userConsents.ts"
-import { createSession } from "../../_shared/db/userSessions.ts"
 import { logCtx } from "../../_shared/logger.ts"
 import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts"
 
@@ -11,8 +10,9 @@ export async function handleConsentFlow(userId: string, replyToken: string, text
     const name = profile?.displayName ?? null
     console.log(`✅ Consent accepted${logCtx({ userId, name })}`)
     await upsertConsent(userId, true, name)
-    await createSession(userId, name)
-    await replyText(replyToken, `ขอบคุณที่ยอมรับนโยบายค่ะ 🙏 เริ่มต้นได้เลย! ${BOT_NAME}พร้อมช่วยสร้างรูปมงคลให้คุณค่ะ ✨`)
+    // Session is NOT created here — next message goes through message.ts
+    // which handles product selection (auto-select if single, menu if multiple)
+    await replyText(replyToken, `ขอบคุณที่ยอมรับนโยบายค่ะ 🙏 เริ่มต้นได้เลย! ${BOT_NAME}พร้อมช่วยเหลือคุณค่ะ ✨`)
     return
   }
 

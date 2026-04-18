@@ -1,13 +1,12 @@
 import {
   deactivateSession,
-  getMissingFields,
   getSessionsForReminder,
-  sessionToCollectedData,
   updateSession,
 } from "../_shared/db/userSessions.ts";
+import { getPricing } from "../_shared/configService.ts";
 import { pushText } from "../_shared/lineService.ts";
 import { logCtx } from "../_shared/logger.ts";
-import { BOT_NAME, KEYWORDS } from "../_shared/constants.ts";
+import { getProduct } from "../_shared/products/index.ts";
 import type { UserSession } from "../_shared/types.ts";
 
 const MAX_REMINDERS = 1;
@@ -53,22 +52,24 @@ async function runReminders(inactiveHours: number): Promise<void> {
 
 async function handleReminder(session: UserSession): Promise<void> {
   const ctx = logCtx({ userId: session.line_user_id, sessionId: session.id })
+  const product = getProduct(session.package_key)
+
   try {
+    const pricing = await getPricing(session.package_key)
+
     if (session.reminder_count >= MAX_REMINDERS) {
       console.log(`🛑 Max reminders reached — deactivating session${ctx}`);
       await deactivateSession(session.id, "no_response");
-      await pushText(
-        session.line_user_id,
-        `ขออภัยค่ะ ${BOT_NAME}ขอปิดรายการนี้ไว้ก่อนนะคะ 🙏 หากต้องการกลับมาสร้างรูปมงคล พิมพ์ว่า ${KEYWORDS.RESTART} ได้เลยค่ะ ✨`,
-      );
+      await pushText(session.line_user_id, product.buildSessionEndMessage(pricing.name_th));
       return;
     }
 
-    const collected = sessionToCollectedData(session);
-    const missing = getMissingFields(collected);
-    const message = buildReminderMessage(
+    const collected = product.sessionToCollectedData(session);
+    const missing = product.getMissingFields(collected);
+    const message = product.buildReminderMessage(
       session.reminder_count,
       missing,
+      pricing.name_th,
       MAX_REMINDERS,
     );
 
@@ -82,39 +83,4 @@ async function handleReminder(session: UserSession): Promise<void> {
   } catch (err) {
     console.error(`❌ Failed to send reminder${ctx}:`, err);
   }
-}
-
-const REMINDER_MESSAGES: Array<(missing: string) => string> = [
-  (missing) =>
-    `${BOT_NAME}รอคุณอยู่นะคะ ✨ ยังขาด ${missing} อยู่เลยค่ะ มาทำต่อกันเลยนะคะ 🙏`,
-  (missing) =>
-    `สวัสดีอีกครั้งค่ะ 🙏 ${BOT_NAME}ยังรอสร้างรูปมงคลให้คุณอยู่นะคะ ✨ ยังขาด ${missing} ค่ะ`,
-  (missing) =>
-    `ว่าไงคะ 😊 ยังนึกถึงรูปมงคลอยู่ไหมคะ? ยังขาด ${missing} อยู่นะคะ 🙏`,
-];
-
-const LAST_WARNING = (missing: string) =>
-  `นี่คือการแจ้งเตือนครั้งสุดท้ายนะคะ 🙏 ถ้าไม่ตอบกลับ ${BOT_NAME}จะปิดรายการนี้ไว้ก่อนนะคะ ยังขาด ${missing} ค่ะ`;
-
-function buildReminderMessage(
-  count: number,
-  missing: string[],
-  maxReminders: number,
-): string {
-  const missingText = missing.map(fieldToThai).join(", ");
-  if (count >= maxReminders - 1) return LAST_WARNING(missingText);
-  return REMINDER_MESSAGES[count % REMINDER_MESSAGES.length](missingText);
-}
-
-function fieldToThai(field: string): string {
-  const map: Record<string, string> = {
-    full_name: "ชื่อ",
-    birthdate: "วันเกิด",
-    wish: "ความปรารถนา",
-    deity: "เทพ",
-    color: "สีที่ชอบ",
-    include_lucky_number: "ใส่เลขมงคลในรูป",
-    include_name: "ใส่ชื่อในรูป",
-  };
-  return map[field] ?? field;
 }

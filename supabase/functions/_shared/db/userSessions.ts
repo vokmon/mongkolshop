@@ -1,77 +1,96 @@
-import { getClient } from "./client.ts"
-import type { UserSession, WallpaperCollectedData } from "../types.ts"
+import { getClient } from "./client.ts";
+import type { UserSession } from "../types.ts";
 
 export async function getSessionById(id: number): Promise<UserSession | null> {
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("id", id)
-    .maybeSingle()
-  return data
+    .maybeSingle();
+  return data;
 }
 
-export async function getActiveSession(lineUserId: string): Promise<UserSession | null> {
+export async function getActiveSession(
+  lineUserId: string,
+): Promise<UserSession | null> {
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("line_user_id", lineUserId)
     .eq("is_active", true)
-    .maybeSingle()
-  return data
+    .maybeSingle();
+  return data;
 }
 
 export async function createSession(
   lineUserId: string,
   displayName: string | null,
-  packageKey = "wallpaper",
+  packageKey: string,
 ): Promise<UserSession> {
   const { data, error } = await getClient()
     .from("user_sessions")
-    .insert({ line_user_id: lineUserId, display_name: displayName, package_key: packageKey, status: "collecting" })
+    .insert({
+      line_user_id: lineUserId,
+      display_name: displayName,
+      package_key: packageKey,
+      status: "collecting",
+    })
     .select()
-    .single()
-  if (error) throw error
-  return data
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function updateSession(
   sessionId: number,
-  patch: Partial<Pick<UserSession,
-    | "status"
-    | "collected_data"
-    | "conversation_history"
-    | "current_order_no"
-    | "reminder_count"
-    | "last_reminded_at"
-    | "abandoned_reason"
-    | "abandoned_at"
-    | "package_key"
-    | "off_topic_count"
-    | "chat_mode"
-    | "is_active"
-  >>,
+  patch: Partial<
+    Pick<
+      UserSession,
+      | "status"
+      | "collected_data"
+      | "conversation_history"
+      | "current_order_no"
+      | "reminder_count"
+      | "last_reminded_at"
+      | "abandoned_reason"
+      | "abandoned_at"
+      | "package_key"
+      | "off_topic_count"
+      | "chat_mode"
+      | "is_active"
+    >
+  >,
 ): Promise<void> {
   await getClient()
     .from("user_sessions")
     .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", sessionId)
+    .eq("id", sessionId);
 }
 
-export async function deactivateSession(sessionId: number, reason?: string): Promise<void> {
+export async function deactivateSession(
+  sessionId: number,
+  reason?: string,
+): Promise<void> {
   await updateSession(sessionId, {
     is_active: false,
-    ...(reason ? { abandoned_reason: reason, abandoned_at: new Date().toISOString() } : {}),
-  })
+    ...(reason
+      ? { abandoned_reason: reason, abandoned_at: new Date().toISOString() }
+      : {}),
+  });
 }
 
-export async function getStaleDeactivatedSessions(days: number): Promise<UserSession[]> {
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+export async function getStaleDeactivatedSessions(
+  days: number,
+): Promise<UserSession[]> {
+  const cutoff = new Date(
+    Date.now() - days * 24 * 60 * 60 * 1000,
+  ).toISOString();
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("is_active", false)
-    .lt("updated_at", cutoff)
-  return data ?? []
+    .lt("updated_at", cutoff);
+  return data ?? [];
 }
 
 export async function wipeUserSessionData(lineUserId: string): Promise<void> {
@@ -82,32 +101,39 @@ export async function wipeUserSessionData(lineUserId: string): Promise<void> {
       collected_data: {},
       updated_at: new Date().toISOString(),
     })
-    .eq("line_user_id", lineUserId)
+    .eq("line_user_id", lineUserId);
 }
 
 export async function getGhostSessions(days: number): Promise<UserSession[]> {
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const cutoff = new Date(
+    Date.now() - days * 24 * 60 * 60 * 1000,
+  ).toISOString();
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("is_active", true)
-    .is("current_order_no", null)  // don't touch sessions with an active order
-    .lt("updated_at", cutoff)
-  return data ?? []
+    .is("current_order_no", null) // don't touch sessions with an active order
+    .lt("updated_at", cutoff);
+  return data ?? [];
 }
 
-export async function getSessionsForReminder(inactiveHours: number, maxReminders: number): Promise<UserSession[]> {
+export async function getSessionsForReminder(
+  inactiveHours: number,
+  maxReminders: number,
+): Promise<UserSession[]> {
   // Active sessions that haven't completed data collection (no order yet)
   // Include sessions at maxReminders so we can deactivate those on this run
-  const cutoff = new Date(Date.now() - inactiveHours * 60 * 60 * 1000).toISOString()
+  const cutoff = new Date(
+    Date.now() - inactiveHours * 60 * 60 * 1000,
+  ).toISOString();
   const { data } = await getClient()
     .from("user_sessions")
     .select("*")
     .eq("is_active", true)
     .is("current_order_no", null)
     .lte("reminder_count", maxReminders)
-    .or(`last_reminded_at.is.null,last_reminded_at.lt.${cutoff}`)
-  return data ?? []
+    .or(`last_reminded_at.is.null,last_reminded_at.lt.${cutoff}`);
+  return data ?? [];
 }
 
 // ============================================================
@@ -115,33 +141,7 @@ export async function getSessionsForReminder(inactiveHours: number, maxReminders
 // ============================================================
 
 export function generateOrderNo(): string {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "")
-  const rand = Math.random().toString(36).toUpperCase().slice(2, 6)
-  return `MK-${date}-${rand}`
-}
-
-export function sessionToCollectedData(session: UserSession): WallpaperCollectedData {
-  const d = session.collected_data as Partial<WallpaperCollectedData>
-  return {
-    full_name: d.full_name ?? null,
-    birthdate: d.birthdate ?? null,
-    wish: d.wish ?? null,
-    deity_key: d.deity_key ?? null,
-    deity_source: d.deity_source ?? null,
-    color: d.color ?? null,
-    include_lucky_number: d.include_lucky_number ?? null,
-    include_name: d.include_name ?? null,
-  }
-}
-
-export function getMissingFields(data: WallpaperCollectedData): string[] {
-  const missing: string[] = []
-  if (!data.full_name) missing.push("full_name")
-  if (!data.birthdate) missing.push("birthdate")
-  if (!data.wish) missing.push("wish")
-  if (!data.deity_key) missing.push("deity")
-  if (!data.color) missing.push("color")
-  if (data.include_lucky_number == null) missing.push("include_lucky_number")
-  if (data.include_name == null) missing.push("include_name")
-  return missing
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = Math.random().toString(36).toUpperCase().slice(2, 6);
+  return `MK-${date}-${rand}`;
 }

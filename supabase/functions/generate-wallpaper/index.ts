@@ -4,13 +4,12 @@ import { getOrderByOrderNo, updateOrder } from "../_shared/db/orders.ts";
 import { uploadImage } from "../_shared/db/storage.ts";
 import {
   getSessionById,
-  sessionToCollectedData,
   updateSession,
 } from "../_shared/db/userSessions.ts";
 import { pushImageWithText, pushText } from "../_shared/lineService.ts";
-import { buildWallpaperDeliveryText } from "../_shared/products/wallpaper.ts";
+import { getProduct } from "../_shared/products/index.ts";
 import { logCtx } from "../_shared/logger.ts";
-import type { WallpaperGeneratedContent } from "../_shared/types.ts";
+import type { WallpaperGeneratedContent } from "../_shared/types.ts"; // used for generatedContent shape
 
 const MAX_ATTEMPTS = 5;
 const ai = new MockAIService();
@@ -75,7 +74,8 @@ async function runGeneration(
   try {
     if (!session) throw new Error(`Session not found: ${order.session_id}`);
 
-    const collected = sessionToCollectedData(session);
+    const product = getProduct(order.package_key);
+    const collected = product.sessionToCollectedData(session);
     console.log(
       `📋 Session loaded${ctxA} deity:${collected.deity_key ?? "auto"} color:${collected.color}`,
     );
@@ -84,7 +84,7 @@ async function runGeneration(
     let deityKey = collected.deity_key;
     if (!deityKey) {
       console.log(`🔮 Deity not set — requesting recommendation${ctxA}`);
-      const deityPrompt = fillPrompt(await getPrompt("wallpaper", "deity_recommendation"), {
+      const deityPrompt = fillPrompt(await getPrompt(order.package_key, "deity_recommendation"), {
         collected_data: JSON.stringify(collected, null, 2),
       });
       const recommendation = await ai.recommendDeity(deityPrompt);
@@ -95,14 +95,14 @@ async function runGeneration(
     // ── 5. Generate fortune content ───────────────────────────
     console.log(`📖 Generating fortune content${ctxA}`);
     const collectedWithDeity = { ...collected, deity_key: deityKey };
-    const fortunePrompt = fillPrompt(await getPrompt("wallpaper", "fortune_generation"), {
+    const fortunePrompt = fillPrompt(await getPrompt(order.package_key, "fortune_generation"), {
       collected_data: JSON.stringify(collectedWithDeity, null, 2),
     });
     const fortuneContent = await ai.generateContent(fortunePrompt);
 
     // ── 6. Fill image prompt ──────────────────────────────────
     const imageData = { ...collectedWithDeity, lucky_number: fortuneContent.lucky_number }
-    const imagePrompt = fillPrompt(await getPrompt("wallpaper", "image_generation"), {
+    const imagePrompt = fillPrompt(await getPrompt(order.package_key, "image_generation"), {
       collected_data: JSON.stringify(imageData, null, 2),
     });
 
@@ -125,7 +125,7 @@ async function runGeneration(
       lucky_colors: fortuneContent.lucky_colors,
       lucky_number: fortuneContent.lucky_number,
     };
-    const deliveryText = buildWallpaperDeliveryText(fortuneContent);
+    const deliveryText = product.buildDeliveryText(generatedContent);
 
     await Promise.all([
       updateOrder(order.id, {
@@ -153,10 +153,7 @@ async function runGeneration(
         status: "failed",
         last_error: errorMessage,
       });
-      await pushText(
-        lineUserId,
-        "ขออภัยค่ะ เกิดข้อผิดพลาดในการสร้างรูปมงคล 😔 ทีมงานจะติดต่อกลับเร็วๆ นี้นะคะ 🙏",
-      );
+      await pushText(lineUserId, getProduct(order.package_key).buildGenerationFailedMessage());
       console.log(
         `🛑 All retries exhausted — marking as failed${ctx}`,
       );
