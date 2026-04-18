@@ -1,6 +1,6 @@
 # MongkolArt — Project Document
 
-Version: Current (updated 2026-04-17) | ราคา 159 บาท | Supabase + LINE OA + OpenAI + Stripe
+Version: Current (updated 2026-04-18) | Supabase + LINE OA + OpenAI + Stripe
 
 ---
 
@@ -27,14 +27,17 @@ LINE OA Chatbot "น้องมงคล" — คุยธรรมชาติ
 
 1. user ทักครั้งแรก → เช็ค user_consents → ยังไม่ยอมรับ PDPA
 2. ส่ง consent message + ปุ่ม [ยอมรับ] [ดูนโยบาย]
-3. user กด "ยอมรับ" → บันทึก user_consents (ครั้งเดียวตลอดไป)
-4. คุยอิสระกับน้องมงคล (gpt-5.4-mini + conversation history)
-5. GPT extract ข้อมูล: full_name, birthdate, wish, deity, color, include_lucky_number, include_name
-6. เมื่อครบ 7 อย่าง → bot สรุป + ขอ confirm
-7. user confirm → bot ส่ง Stripe Payment Link (159 บาท)
-8. Stripe webhook → trigger generate อัตโนมัติ (background)
-9. gpt-5.4-mini แนะนำเทพ (ถ้าไม่ได้เลือก) + สร้างคำทำนาย JSON → gpt-image-1 สร้างรูปจาก template โดยตรง
-10. upload รูปไป Supabase Storage → ส่งรูป + คำทำนาย + คาถา + เลขมงคล กลับ LINE
+3. user กด "ยอมรับ" → บันทึก user_consents (ครั้งเดียวตลอดไป) — **ยังไม่สร้าง session ณ จุดนี้**
+4. ข้อความถัดไป → โหลด pricing ทั้งหมด → จับคู่กับ entry_keywords → สร้าง session ด้วย package_key ที่ถูกต้อง
+   - ถ้าไม่ตรง + มีสินค้าเดียว → เลือกอัตโนมัติ
+   - ถ้าไม่ตรง + หลายสินค้า → แสดง quick-reply รายการ keywords ทั้งหมด
+5. คุยอิสระกับน้องมงคล (gpt-5.4-mini + conversation history)
+6. GPT extract ข้อมูล: full_name, birthdate, wish, deity, color, include_lucky_number, include_name
+7. เมื่อครบ 7 อย่าง → bot สรุป + ขอ confirm
+8. user confirm → bot ส่ง Stripe Payment Button (ชำระ ${price} บาท)
+9. Stripe webhook → trigger generate อัตโนมัติ (background)
+10. gpt-5.4-mini แนะนำเทพ (ถ้าไม่ได้เลือก) + สร้างคำทำนาย JSON → gpt-image-1 สร้างรูปจาก template โดยตรง
+11. upload รูปไป Supabase Storage → ส่งรูป + คำทำนาย + คาถา + เลขมงคล กลับ LINE
 
 ## 3.2 Order Status Flow
 
@@ -89,7 +92,7 @@ chat_mode        TEXT DEFAULT 'conversational'  -- conversational | guided
 | Scenario                 | Solution                                |
 | :----------------------- | :-------------------------------------- |
 | มี active order อยู่     | บล็อกสั่งซ้อน แจ้งสถานะ                 |
-| "เริ่มใหม่" ก่อนจ่าย     | Deactivate session เก่า → สร้างใหม่     |
+| "เริ่มใหม่" ก่อนจ่าย     | Deactivate session เก่า → สร้างใหม่ด้วย package_key เดิม → แจ้ง pricing.name_th |
 | "เริ่มใหม่" หลังจ่ายแล้ว | บล็อก order กำลังดำเนินการ              |
 | user block OA            | จับ LINE error 410 → mark undeliverable |
 
@@ -157,7 +160,7 @@ last_reminded_at reset เป็น null ทุกครั้งที่ user 
 | :---------------------- | :----------------------------------------------------------------------------------------- |
 | id                      | SERIAL PRIMARY KEY                                                                         |
 | line_user_id            | TEXT NOT NULL (INDEX)                                                                      |
-| package_key             | TEXT DEFAULT 'wallpaper' — รองรับ multi-product                                            |
+| package_key             | TEXT NOT NULL — รองรับ multi-product (ไม่มี default — ต้องระบุเสมอ)                        |
 | status                  | TEXT NOT NULL — collecting \| awaiting_payment \| done                                                             |
 | is_active               | BOOLEAN DEFAULT TRUE                                                                                               |
 | collected_data          | JSONB DEFAULT '{}' — ข้อมูลจาก conversation (full_name, birthdate, wish, deity_key, color, include_lucky_number, include_name) |
@@ -208,13 +211,15 @@ _admin แก้ content ใน Supabase Dashboard ได้เลย ไม่�
 
 ## 5.5 pricing
 
-| Column          | Value               |
-| :-------------- | :------------------ |
-| package_key     | wallpaper           |
-| name_th         | รูปมงคล             |
-| price           | 159 (satang: 15900) |
-| stripe_price_id | price_xxx           |
-| is_active       | TRUE                |
+| Column          | Type / Note                                                          |
+| :-------------- | :------------------------------------------------------------------- |
+| package_key     | TEXT — ระบุสินค้า                                                    |
+| name_th         | TEXT — ชื่อสินค้าภาษาไทย (ใช้ใน messages)                           |
+| stripe_price_id | TEXT — Stripe Price ID                                               |
+| is_active       | BOOLEAN                                                              |
+| entry_keywords  | TEXT[] — คำที่ user พิมพ์เพื่อเริ่มสินค้านี้ (เช็คแบบ exact match) |
+
+_ตัวอย่าง wallpaper: entry_keywords = ['วอลเปเปอร์', 'รูปมงคล', 'รูปมงคลส่วนตัว', 'รูปเทพ', 'รูปพื้นหลัง', 'สั่งรูป', 'สั่งวอลเปเปอร์', 'อยากได้รูป', 'ต้องการรูป']_
 
 ## 5.6 Cleanup Rules (cleanup-sessions cron)
 
@@ -279,7 +284,8 @@ mongkolshop/
 │   │       │   ├── prompts.ts
 │   │       │   └── storage.ts
 │   │       └── products/
-│   │           └── wallpaper.ts     # buildWallpaperDeliveryText
+│   │           ├── index.ts         # ProductModule interface, getProduct(), getProductKeyByEntryKeyword()
+│   │           └── wallpaper.ts     # ProductModule default export — sessionToCollectedData, deliver(), etc.
 │   ├── migrations/
 │   │   └── (numbered format: 0000001_action_target.sql)
 │   └── config.toml              # Supabase config (cron ตั้งผ่าน Dashboard)
@@ -304,14 +310,17 @@ mongkolshop/
 
 ## 9.1 line-webhook/index.ts — Logic หลัก
 
-1. ตรวจ user_consents → ยังไม่ยอมรับ → ส่ง consent message
-2. ตรวจ keyword พิเศษ (constants.ts KEYWORDS) → handle ทันที
-3. status=awaiting_payment (รอ Stripe) → แจ้งสถานะเท่านั้น ไม่ส่งไป GPT
-4. ส่ง message + last 20 history ไป gpt-5.4-mini
-5. รับ { message, extracted, is_complete, is_off_topic } กลับมา
-6. merge extracted เข้า collected_data + reset last_reminded_at = null
-7. ถ้า is_complete → สร้าง order + ส่ง Stripe payment button
-8. บันทึก history + reply user
+1. ตรวจ user_consents → ยังไม่ยอมรับ → ส่ง consent message (ยอมรับแล้ว **ไม่สร้าง session** — รอข้อความถัดไป)
+2. ถ้าไม่มี session → โหลด getAllPricing() → จับคู่ entry_keywords → สร้าง session ด้วย package_key
+   - ไม่ตรง + สินค้าเดียว → auto-select
+   - ไม่ตรง + หลายสินค้า → แสดง quick-reply รายการ keywords ทั้งหมด
+3. ตรวจ keyword พิเศษ (constants.ts KEYWORDS) → handle ทันที
+4. status=awaiting_payment (รอ Stripe) → แจ้งสถานะเท่านั้น ไม่ส่งไป GPT
+5. ส่ง message + last 20 history ไป gpt-5.4-mini
+6. รับ { message, extracted, is_complete, is_off_topic } กลับมา
+7. merge extracted เข้า collected_data + reset last_reminded_at = null
+8. ถ้า is_complete → สร้าง order + ส่ง Stripe payment button (`paymentButtonMessage(text, url, priceAmount)`)
+9. บันทึก history + reply user
 
 ## 9.2 generate-wallpaper/index.ts — Background Job
 
@@ -325,6 +334,8 @@ mongkolshop/
 8. uploadImage → Supabase Storage → imageUrl
 9. updateOrder(done) + updateSession(status=done, is_active=false) + pushImageWithText — parallel
 10. updateOrder(delivered_at)
+
+_หมายเหตุ: generate-wallpaper เป็น function เฉพาะสินค้า wallpaper — สำหรับ re-delivery (stuck-order-check) ใช้ `product.deliver(lineUserId, order)` แทน_
 
 ## 9.3 OpenAI Service (\_shared/ai/impl/openai.ts)
 
@@ -350,7 +361,7 @@ Retry logic: selective — retry เฉพาะ status >= 500, 429, network err
 | Stuck generating   | status=generating, generating_at < now-5min, attempts < 5  | Re-invoke generate-wallpaper               |
 | Zombie             | status=generating, generating_at < now-5min, attempts >= 5 | Mark failed + notify LINE                  |
 | Abandoned paid     | status=paid, paid_at < now-5min                            | Invoke generate-wallpaper                  |
-| Done not delivered | status=done, delivered_at IS NULL, completed_at < now-5min | Re-push image to LINE + deactivate session |
+| Done not delivered | status=done, delivered_at IS NULL, completed_at < now-5min | `product.deliver(lineUserId, order)` + deactivate session |
 
 # 10. Environment Variables
 
@@ -412,4 +423,4 @@ Expiry / CVC: ใส่อะไรก็ได้ที่ valid format เช�
 
 ---
 
-_MongkolArt — Project Document (updated 2026-04-17)_
+_MongkolArt — Project Document (updated 2026-04-18)_

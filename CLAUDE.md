@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **MongkolArt — "น้องมงคล" LINE OA Chatbot**
 
-A LINE OA chatbot that collects 5 fields from users via natural conversation (GPT-4o), takes a 159 THB payment via Stripe, then generates a personalized sacred art wallpaper (GPT-4o + DALL-E 3) and delivers it via LINE push message. No frontend — everything runs as Supabase Edge Functions (Deno/TypeScript).
+A LINE OA chatbot that collects fields from users via natural conversation (gpt-5.4-mini), takes payment via Stripe, then generates a personalized sacred art wallpaper (gpt-5.4-mini + gpt-image-1) and delivers it via LINE push message. No frontend — everything runs as Supabase Edge Functions (Deno/TypeScript).
 
 LINE OA channel: `@652hgnwz`
 
@@ -15,8 +15,8 @@ LINE OA channel: `@652hgnwz`
 - **Runtime:** Supabase Edge Functions (Deno/TypeScript)
 - **Database:** Supabase PostgreSQL
 - **Storage:** Supabase Storage (generated PNG images, bucket: `images`, public)
-- **AI:** OpenAI GPT-4o (chatbot + image prompt + fortune), DALL-E 3 (1024×1792 HD)
-- **Payment:** Stripe Checkout (159 THB, supports PromptPay + cards, promotion codes enabled)
+- **AI:** gpt-5.4-mini via Responses API (chatbot + fortune + deity recommendation), gpt-image-1 (1024×1792 portrait)
+- **Payment:** Stripe Checkout (supports PromptPay + cards, promotion codes enabled)
 - **Messaging:** LINE Messaging API
 
 ## Commands
@@ -50,25 +50,26 @@ supabase/
     cleanup-sessions/   # Cron (02:00 daily): deactivate ghost sessions
     _shared/
       types.ts             # TypeScript interfaces — DB tables, GPT responses, product-specific data types
-      lineService.ts       # LINE reply/push/quickReply/paymentButton helpers
-      configService.ts     # Loads prompts + pricing from DB (prompts cached by package_key:prompt_key)
+      lineService.ts       # LINE reply/push/quickReply/paymentButtonMessage(text, url, priceAmount) helpers
+      configService.ts     # Loads prompts + pricing from DB (prompts cached by package_key:prompt_key), getAllPricing()
       checkoutService.ts   # Stripe checkout session creation (allow_promotion_codes: true)
       generationRouter.ts  # Maps package_key → Edge Function name, fire-and-forget invoker
       ai/
         aiService.ts       # IAiService interface
         impl/
-          openai.ts        # OpenAIService (uses npm:openai, web search on generateImagePrompt)
+          openai.ts        # OpenAIService (gpt-5.4-mini Responses API + gpt-image-1)
           mock.ts          # MockAIService for testing without OpenAI key
       db/
         client.ts          # Supabase client factory
         userConsents.ts    # upsertConsent(lineUserId, accepted, displayName?)
-        userSessions.ts    # getActiveSession, createSession, updateSession, sessionToCollectedData, getSessionsForReminder, getGhostSessions
+        userSessions.ts    # getActiveSession, createSession(lineUserId, displayName, packageKey), updateSession, getSessionsForReminder, getGhostSessions
         orders.ts          # createOrder, updateOrder, getStuckGeneratingOrders, getAbandonedPaidOrders, getUndeliveredOrders
-        pricing.ts         # getActivePricingByKey(packageKey)
+        pricing.ts         # getActivePricingByKey(packageKey), getAllActivePricing()
         prompts.ts         # getAllPrompts()
         storage.ts         # uploadImage → Supabase Storage
       products/
-        wallpaper.ts       # buildWallpaperDeliveryText(content) — shared delivery message builder
+        index.ts           # ProductModule interface, getProduct(packageKey), getProductKeyByEntryKeyword(text, allPricing)
+        wallpaper.ts       # ProductModule default export — all wallpaper-specific logic + deliver(lineUserId, order)
   migrations/
     20260415_001_schema.sql   # All table definitions
     20260416_001_seed.sql     # Initial prompts + pricing data
@@ -84,14 +85,17 @@ docs/                   # Planning documents (read-only reference)
 
 ### Core Flow
 1. LINE sends webhook → `line-webhook/index.ts`
-2. Check `user_consents` (PDPA) → if not accepted, send consent message + save `display_name`
-3. Check special keywords (`สถานะ`, `เริ่มใหม่`, `ช่วยด้วย`, etc.) → handle immediately
-4. If `status = 'awaiting_payment'` → reply with payment reminder + refresh link if expired
-5. Send message + last 20 conversation history to GPT-4o with `bot_personality` prompt
-6. GPT returns `{ message, extracted, is_complete, is_off_topic }` as JSON
-7. Merge extracted fields into `user_sessions.collected_data` JSONB, reset `last_reminded_at = null`
-8. If `is_complete` → create order in `orders` table → send Stripe payment button via LINE
-9. Save to `conversation_history`, reply to user
+2. Check `user_consents` (PDPA) → if not accepted, send consent message + save `display_name` (consent acceptance does NOT create a session)
+3. If no active session → load `getAllPricing()` → match text against `entry_keywords` → create session with matched `package_key`
+   - If no match + single product → auto-select
+   - If no match + multiple products → show quick-reply menu (flat list of all `entry_keywords` across all products)
+4. Check special keywords (`สถานะ`, `เริ่มใหม่`, `ช่วยด้วย`, etc.) → handle immediately
+5. If `status = 'awaiting_payment'` → reply with payment reminder + refresh link if expired
+6. Send message + last 20 conversation history to gpt-5.4-mini with `bot_personality` prompt
+7. GPT returns `{ message, extracted, is_complete, is_off_topic }` as JSON
+8. Merge extracted fields into `user_sessions.collected_data` JSONB, reset `last_reminded_at = null`
+9. If `is_complete` → create order in `orders` table → send Stripe payment button via LINE
+10. Save to `conversation_history`, reply to user
 
 ### Payment → Generation
 - Stripe fires `checkout.session.completed` → `stripe-webhook/index.ts`
@@ -99,8 +103,8 @@ docs/                   # Planning documents (read-only reference)
 - Updates `orders.status = 'paid'`, calls `invokeGenerationJob(order)` from `generationRouter.ts`
 - Router maps `order.package_key` → correct Edge Function (`wallpaper` → `generate-wallpaper`)
 - `generate-wallpaper` pulls order + session data, fetches prompt templates from DB by `package_key`
-- Calls GPT-4o to recommend deity (if not set) → generate fortune JSON → generate image prompt
-- Calls DALL-E 3 → uploads PNG to Supabase Storage → updates order → pushes to LINE
+- Calls gpt-5.4-mini to recommend deity (if not set) → generate fortune JSON → fill image prompt template
+- Calls gpt-image-1 → uploads PNG to Supabase Storage → updates order → pushes to LINE
 
 ### Stripe Checkout Expiry
 - Stripe fires `checkout.session.expired` → `stripe-webhook/index.ts`
@@ -111,7 +115,7 @@ docs/                   # Planning documents (read-only reference)
 |---|---|---|
 | `stuck-order-check` | `*/5 * * * *` | `{}` |
 | `reminder-check` | `0 */2 * * *` | `{"inactive_hours": 2}` |
-| `cleanup-sessions` | `0 2 * * *` | `{"ghost_days": 3}` |
+| `cleanup-sessions` | `0 2 * * *` | `{"ghost_days": 3, "data_retention_days": 90}` |
 
 ### stuck-order-check Scenarios
 | Scenario | Condition | Action |
@@ -119,7 +123,7 @@ docs/                   # Planning documents (read-only reference)
 | Stuck generating (retryable) | `status=generating`, `generating_at < now-5min`, `attempts < 5` | Re-invoke `generate-wallpaper` |
 | Zombie | `status=generating`, `generating_at < now-5min`, `attempts >= 5` | Mark `failed` + notify LINE |
 | Abandoned paid | `status=paid`, `paid_at < now-5min` | Invoke `generate-wallpaper` |
-| Done but not delivered | `status=done`, `delivered_at IS NULL`, `completed_at < now-5min` | Re-push image to LINE |
+| Done but not delivered | `status=done`, `delivered_at IS NULL`, `completed_at < now-5min` | `product.deliver(lineUserId, order)` — product-specific re-delivery |
 
 ### Database Tables
 | Table | Purpose |
@@ -128,15 +132,19 @@ docs/                   # Planning documents (read-only reference)
 | `user_sessions` | Conversation state — `status` (collecting/awaiting_payment/done), `collected_data` JSONB, history, `package_key`, reminder tracking |
 | `orders` | Payment + generation lifecycle — `generated_content` JSONB, `image_url`, `package_key`, `promotion_code`, `discount_amount`, status: pending→paid→generating→done\|failed |
 | `prompts` | AI prompt templates — scoped by `package_key` (`shared` or `wallpaper`), unique on `(package_key, prompt_key)` |
-| `pricing` | Package config per `package_key` — price, stripe_price_id |
+| `pricing` | Package config per `package_key` — stripe_price_id, name_th, entry_keywords (text[]) |
 
 ### Multi-product Design
-- `user_sessions.collected_data` — JSONB, cast to product-specific type (e.g. `WallpaperCollectedData`)
-- `orders.generated_content` — JSONB, cast to product-specific type (e.g. `WallpaperGeneratedContent`)
-- `user_sessions.package_key` + `orders.package_key` — determines which function, pricing, and prompts to use
+- `_shared/products/index.ts` — `ProductModule` interface + `getProduct(packageKey)` registry + `getProductKeyByEntryKeyword(text, allPricing)`
+- `_shared/products/wallpaper.ts` — implements `ProductModule` as a default export (explicit object, not loose functions)
+- `ProductModule` methods: `sessionToCollectedData`, `getMissingFields`, `buildMyDataMessage`, `formatCollectedData`, `fieldToThai`, `buildReminderMessage`, `buildSessionEndMessage`, `getFieldLabels`, `extractedToCollected`, `buildDeliveryText`, `buildGenerationFailedMessage`, `deliver(lineUserId, order)`
+- `user_sessions.collected_data` — JSONB, cast to product-specific type inside product module
+- `orders.generated_content` — JSONB, cast to product-specific type inside product module
+- `user_sessions.package_key` + `orders.package_key` — determines which product module, function, pricing, and prompts to use
+- `pricing.entry_keywords text[]` — keywords that trigger session creation for this product (stored in DB, no redeploy needed to change)
 - `prompts.package_key` — `'shared'` (bot_personality, privacy_policy) or product-specific (`'wallpaper'`)
 - `generationRouter.ts` — maps `package_key` to the correct generation Edge Function
-- Adding a new product = new `pricing` row + new prompt rows + new TypeScript types + new Edge Function + entry in `FUNCTION_MAP`
+- Adding a new product = new `products/<name>.ts` + register in `PRODUCTS` map + new `pricing` row with `entry_keywords` + new prompt rows + new Edge Function + entry in `FUNCTION_MAP`
 
 ### Prompt Keys
 | package_key | prompt_key | Used by |
@@ -179,6 +187,8 @@ LINE_OA_URL=
 OPENAI_API_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+IMAGE_SIZE=1024x1792
+IMAGE_QUALITY=medium         # low | medium | high
 ```
 
 `.env.dev`, `.env.prod` are gitignored. Only `.env.example` is committed.
