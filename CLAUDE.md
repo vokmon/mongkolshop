@@ -198,6 +198,7 @@ IMAGE_QUALITY=medium         # low | medium | high
 ## Coding Conventions
 
 - **Functions with more than 3 parameters must use an object argument** instead of positional args. Example: `createOrder({ lineUserId, sessionId, orderNo, packageKey })` not `createOrder(lineUserId, sessionId, orderNo, packageKey)`
+- **Handler and module implementations use TypeScript class style** — `class FooHandler implements KeywordHandler { ... }` with `export default new FooHandler()`. No plain object literals or factory functions for this pattern.
 - `BOT_NAME` is NOT a constant — fetch via `getSetting("bot_name")` from `configService.ts` (cached)
 - `admin_contact` message is stored in `settings` table — edit from DB, no redeploy needed
 

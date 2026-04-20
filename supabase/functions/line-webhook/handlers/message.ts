@@ -5,7 +5,7 @@ import { getAllPricing, getPricing, getSetting } from "../../_shared/configServi
 import { getProductKeyByEntryKeyword } from "../../_shared/products/index.ts"
 import { logCtx } from "../../_shared/logger.ts"
 import { handleConsentFlow } from "./consent.ts"
-import { handleSpecialKeyword } from "./keywords.ts"
+import { handleSpecialKeyword } from "./keywords/index.ts"
 import { handleAwaitingPayment, handleChat } from "./chat.ts"
 
 export async function handleMessage(userId: string, replyToken: string, text: string): Promise<void> {
