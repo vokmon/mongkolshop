@@ -3,6 +3,7 @@ import {
   fillPrompt,
   getPrompt,
   getPricing,
+  getSetting,
 } from "../../_shared/configService.ts";
 import {
   paymentButtonMessage,
@@ -24,7 +25,7 @@ import {
 } from "../lib/guided.ts";
 import { getProduct } from "../../_shared/products/index.ts";
 import { logCtx } from "../../_shared/logger.ts";
-import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts";
+import { KEYWORDS } from "../../_shared/constants.ts";
 import type { ChatMessage, UserSession } from "../../_shared/types.ts";
 
 const MAX_CONVERSATION_HISTORY = 40;
@@ -57,8 +58,9 @@ export async function handleAwaitingPayment(
     getOrRefreshCheckoutUrl(order, pricing.stripe_price_id),
     getPriceAmount(pricing.stripe_price_id),
   ])
+  const botName = await getSetting("bot_name")
   await replyMessages(replyToken, [
-    { type: "text", text: `${BOT_NAME}ยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว ${BOT_NAME}จะดำเนินการทันทีเลยค่ะ ✨` },
+    { type: "text", text: `${botName}ยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว ${botName}จะดำเนินการทันทีเลยค่ะ ✨` },
     paymentButtonMessage(`รอการชำระเงินอยู่นะคะ 🙏 กรุณาชำระ ${priceAmount} บาท เพื่อดำเนินการสร้าง${pricing.name_th}ของคุณได้เลยค่ะ ✨`, checkoutUrl, priceAmount),
   ])
 }
@@ -117,9 +119,10 @@ export async function handleChat(
   if (currentOffTopicCount >= 10) {
     console.log(`🛑 Off-topic limit reached — deactivating session${logCtx({ userId })}`)
     await deactivateSession(session.id, "off_topic_limit");
+    const botName = await getSetting("bot_name")
     await replyText(
       replyToken,
-      `ขออภัยค่ะ ${BOT_NAME}ขอจบการสนทนานี้ก่อนนะคะ หากต้องการเริ่มใหม่ พิมพ์ว่า ${KEYWORDS.RESTART} ได้เลยค่ะ 🙏`,
+      `ขออภัยค่ะ ${botName}ขอจบการสนทนานี้ก่อนนะคะ หากต้องการเริ่มใหม่ พิมพ์ว่า ${KEYWORDS.RESTART} ได้เลยค่ะ 🙏`,
     );
     return;
   }
@@ -154,7 +157,7 @@ export async function handleChat(
       getPriceAmount(pricing.stripe_price_id),
     ])
 
-    const order = await createOrder(userId, session.id, orderNo, session.package_key)
+    const order = await createOrder({ lineUserId: userId, sessionId: session.id, orderNo, packageKey: session.package_key })
     await updateOrder(order.id, { stripe_session_id: stripeSessionId, checkout_url: checkoutUrl })
     await updateSession(session.id, { status: "awaiting_payment", current_order_no: orderNo })
     console.log(`📦 Order created — Stripe checkout sent${logCtx({ userId, orderNo })}`)

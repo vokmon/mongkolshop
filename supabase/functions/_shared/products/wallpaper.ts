@@ -1,14 +1,15 @@
 import type { BotResponse, Order, UserSession, WallpaperCollectedData, WallpaperGeneratedContent } from "../types.ts"
-import { BOT_NAME, KEYWORDS } from "../constants.ts"
+import { KEYWORDS } from "../constants.ts"
+import { getSetting } from "../configService.ts"
 import { pushImageWithText } from "../lineService.ts"
 import type { ProductModule } from "./index.ts"
 
-const REMINDER_TEMPLATES: Array<(missing: string, productName: string) => string> = [
-  (missing) =>
-    `${BOT_NAME}รอคุณอยู่นะคะ ✨ ยังขาด ${missing} อยู่เลยค่ะ มาทำต่อกันเลยนะคะ 🙏`,
-  (missing, productName) =>
-    `สวัสดีอีกครั้งค่ะ 🙏 ${BOT_NAME}ยังรอสร้าง${productName}ให้คุณอยู่นะคะ ✨ ยังขาด ${missing} ค่ะ`,
-  (missing, productName) =>
+const REMINDER_TEMPLATES: Array<(missing: string, productName: string, botName: string) => string> = [
+  (missing, _productName, botName) =>
+    `${botName}รอคุณอยู่นะคะ ✨ ยังขาด ${missing} อยู่เลยค่ะ มาทำต่อกันเลยนะคะ 🙏`,
+  (missing, productName, botName) =>
+    `สวัสดีอีกครั้งค่ะ 🙏 ${botName}ยังรอสร้าง${productName}ให้คุณอยู่นะคะ ✨ ยังขาด ${missing} ค่ะ`,
+  (missing, productName, _botName) =>
     `ว่าไงคะ 😊 ยังนึกถึง${productName}อยู่ไหมคะ? ยังขาด ${missing} อยู่นะคะ 🙏`,
 ]
 
@@ -92,16 +93,18 @@ const wallpaper: ProductModule = {
 
   fieldToThai,
 
-  buildReminderMessage(count: number, missing: string[], productName: string, maxReminders: number): string {
+  async buildReminderMessage({ count, missing, productName, maxReminders }: { count: number; missing: string[]; productName: string; maxReminders: number }): Promise<string> {
+    const botName = await getSetting("bot_name")
     const missingText = missing.map(fieldToThai).join(", ")
     if (count >= maxReminders - 1) {
-      return `นี่คือการแจ้งเตือนครั้งสุดท้ายนะคะ 🙏 ถ้าไม่ตอบกลับ ${BOT_NAME}จะปิดรายการนี้ไว้ก่อนนะคะ ยังขาด ${missingText} ค่ะ`
+      return `นี่คือการแจ้งเตือนครั้งสุดท้ายนะคะ 🙏 ถ้าไม่ตอบกลับ ${botName}จะปิดรายการนี้ไว้ก่อนนะคะ ยังขาด ${missingText} ค่ะ`
     }
-    return REMINDER_TEMPLATES[count % REMINDER_TEMPLATES.length](missingText, productName)
+    return REMINDER_TEMPLATES[count % REMINDER_TEMPLATES.length](missingText, productName, botName)
   },
 
-  buildSessionEndMessage(productName: string): string {
-    return `ขออภัยค่ะ ${BOT_NAME}ขอปิดรายการนี้ไว้ก่อนนะคะ 🙏 หากต้องการกลับมาสร้าง${productName} พิมพ์ว่า ${KEYWORDS.RESTART} ได้เลยค่ะ ✨`
+  async buildSessionEndMessage(productName: string): Promise<string> {
+    const botName = await getSetting("bot_name")
+    return `ขออภัยค่ะ ${botName}ขอปิดรายการนี้ไว้ก่อนนะคะ 🙏 หากต้องการกลับมาสร้าง${productName} พิมพ์ว่า ${KEYWORDS.RESTART} ได้เลยค่ะ ✨`
   },
 
   getFieldLabels(): Record<string, [string, string]> {

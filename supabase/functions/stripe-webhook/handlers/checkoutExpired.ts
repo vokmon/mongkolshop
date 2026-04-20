@@ -1,11 +1,11 @@
 import Stripe from "npm:stripe"
-import { getPricing } from "../../_shared/configService.ts"
+import { getPricing, getSetting } from "../../_shared/configService.ts"
 import { createCheckoutSession, getPriceAmount } from "../../_shared/checkoutService.ts"
 import { getOrderByOrderNo, updateOrder } from "../../_shared/db/orders.ts"
 import { getSessionById } from "../../_shared/db/userSessions.ts"
 import { paymentButtonMessage, pushMessages, pushText } from "../../_shared/lineService.ts"
 import { logCtx } from "../../_shared/logger.ts"
-import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts"
+import { KEYWORDS } from "../../_shared/constants.ts"
 
 export async function handleCheckoutExpired(session: Stripe.Checkout.Session): Promise<void> {
   const orderNo = session.metadata?.order_no
@@ -42,11 +42,12 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session): P
 
   console.log(`🔗 New checkout link generated${logCtx({ userId: lineUserId, orderNo })}`)
 
+  const botName = await getSetting("bot_name")
   await pushMessages(lineUserId, [
     {
       type: "text",
-      text: `ลิงก์ชำระเงินหมดอายุแล้วค่ะ 😅 ${BOT_NAME}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨\nหรือพิมพ์ว่า ${KEYWORDS.RESTART} หากต้องการเปลี่ยนข้อมูลค่ะ 🙏`,
+      text: `ลิงก์ชำระเงินหมดอายุแล้วค่ะ 😅 ${botName}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨\nหรือพิมพ์ว่า ${KEYWORDS.RESTART} หากต้องการเปลี่ยนข้อมูลค่ะ 🙏`,
     },
-    paymentButtonMessage(`ลิงก์เดิมหมดอายุแล้วค่ะ 😅 ${BOT_NAME}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨ กรุณาชำระ ${priceAmount} บาท ได้เลยค่ะ 🙏`, newCheckoutUrl, priceAmount),
+    paymentButtonMessage(`ลิงก์เดิมหมดอายุแล้วค่ะ 😅 ${botName}สร้างลิงก์ใหม่ให้แล้วนะคะ ✨ กรุณาชำระ ${priceAmount} บาท ได้เลยค่ะ 🙏`, newCheckoutUrl, priceAmount),
   ])
 }

@@ -1,8 +1,8 @@
-import { getPrompt } from "../../_shared/configService.ts"
+import { getPrompt, getSetting } from "../../_shared/configService.ts"
 import { getUserProfile, quickReply, quickReplyItem, replyMessages, replyText } from "../../_shared/lineService.ts"
 import { upsertConsent } from "../../_shared/db/userConsents.ts"
 import { logCtx } from "../../_shared/logger.ts"
-import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts"
+import { KEYWORDS } from "../../_shared/constants.ts"
 
 export async function handleConsentFlow(userId: string, replyToken: string, text: string): Promise<void> {
   if (text.trim().includes(KEYWORDS.CONSENT_ACCEPT) && !text.trim().includes(KEYWORDS.CONSENT_REJECT)) {
@@ -12,7 +12,8 @@ export async function handleConsentFlow(userId: string, replyToken: string, text
     await upsertConsent(userId, true, name)
     // Session is NOT created here — next message goes through message.ts
     // which handles product selection (auto-select if single, menu if multiple)
-    await replyText(replyToken, `ขอบคุณที่ยอมรับนโยบายค่ะ 🙏 เริ่มต้นได้เลย! ${BOT_NAME}พร้อมช่วยเหลือคุณค่ะ ✨`)
+    const botName = await getSetting("bot_name")
+    await replyText(replyToken, `ขอบคุณที่ยอมรับนโยบายค่ะ 🙏 เริ่มต้นได้เลย! ${botName}พร้อมช่วยเหลือคุณค่ะ ✨`)
     return
   }
 

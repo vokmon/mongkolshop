@@ -7,8 +7,8 @@ export interface ProductModule {
   buildMyDataMessage(session: UserSession): string
   formatCollectedData(data: Record<string, unknown>): string
   fieldToThai(field: string): string
-  buildReminderMessage(count: number, missing: string[], productName: string, maxReminders: number): string
-  buildSessionEndMessage(productName: string): string
+  buildReminderMessage(args: { count: number; missing: string[]; productName: string; maxReminders: number }): Promise<string>
+  buildSessionEndMessage(productName: string): Promise<string>
   getFieldLabels(): Record<string, [string, string]>
   extractedToCollected(ex: BotResponse["extracted"]): Record<string, unknown>
   buildDeliveryText(content: Record<string, unknown>): string

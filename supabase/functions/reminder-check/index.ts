@@ -60,18 +60,18 @@ async function handleReminder(session: UserSession): Promise<void> {
     if (session.reminder_count >= MAX_REMINDERS) {
       console.log(`🛑 Max reminders reached — deactivating session${ctx}`);
       await deactivateSession(session.id, "no_response");
-      await pushText(session.line_user_id, product.buildSessionEndMessage(pricing.name_th));
+      await pushText(session.line_user_id, await product.buildSessionEndMessage(pricing.name_th));
       return;
     }
 
     const collected = product.sessionToCollectedData(session);
     const missing = product.getMissingFields(collected);
-    const message = product.buildReminderMessage(
-      session.reminder_count,
+    const message = await product.buildReminderMessage({
+      count: session.reminder_count,
       missing,
-      pricing.name_th,
-      MAX_REMINDERS,
-    );
+      productName: pricing.name_th,
+      maxReminders: MAX_REMINDERS,
+    });
 
     await pushText(session.line_user_id, message);
     await updateSession(session.id, {

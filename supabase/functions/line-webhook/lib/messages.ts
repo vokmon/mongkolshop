@@ -16,6 +16,7 @@ export function buildHelpMessage(): string {
     `🔄 ${KEYWORDS.RESTART} — เริ่มต้นใหม่\n` +
     `👤 ${KEYWORDS.VIEW_DATA} — ดูข้อมูลที่เก็บไว้\n` +
     `🗑️ ${KEYWORDS.DELETE_DATA} — ลบข้อมูลทั้งหมด\n` +
+    `📞 ${KEYWORDS.ADMIN} — ติดต่อแอดมิน\n` +
     `❓ ${KEYWORDS.HELP[0]} — แสดงเมนูนี้`
 }
 

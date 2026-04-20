@@ -6,23 +6,52 @@ import {
   wipeUserSessionData,
 } from "../../_shared/db/userSessions.ts";
 import { getOrderByOrderNo } from "../../_shared/db/orders.ts";
-import { getPricing } from "../../_shared/configService.ts";
+import { getPricing, getSetting } from "../../_shared/configService.ts";
 import {
   buildHelpMessage,
   buildMyDataMessage,
   buildStatusMessage,
 } from "../lib/messages.ts";
 import { logCtx } from "../../_shared/logger.ts";
-import { BOT_NAME, KEYWORDS } from "../../_shared/constants.ts";
+import { KEYWORDS } from "../../_shared/constants.ts";
 import type { UserSession } from "../../_shared/types.ts";
 
-export async function handleSpecialKeyword(
-  userId: string,
-  replyToken: string,
-  text: string,
-  session: UserSession,
-): Promise<boolean> {
+export async function handleSpecialKeyword({
+  userId,
+  replyToken,
+  text,
+  session,
+}: {
+  userId: string
+  replyToken: string
+  text: string
+  session: UserSession | null
+}): Promise<boolean> {
   const t = text.trim();
+
+  if (t === KEYWORDS.ADMIN) {
+    console.log(`📞 Admin contact requested${logCtx({ userId })}`);
+    const [adminContact, botName] = await Promise.all([
+      getSetting("admin_contact"),
+      getSetting("bot_name"),
+    ])
+    let followUp: string
+    if (!session) {
+      followUp = "หรือสำรวจบริการของเราได้จากเมนูด้านล่างได้เลยนะคะ 😊"
+    } else if (session.status === "collecting") {
+      const pricing = await getPricing(session.package_key)
+      followUp = `ระหว่างรอแอดมินตอบ สามารถกรอกข้อมูล${pricing.name_th}ต่อกับ${botName}ได้เลยนะคะ ✨`
+    } else if (session.status === "awaiting_payment") {
+      followUp = "ระหว่างรอแอดมินตอบ ลิงก์ชำระเงินยังใช้งานได้อยู่นะคะ กดชำระได้เลยค่ะ 💳"
+    } else {
+      followUp = "ขอบคุณที่ติดต่อมานะคะ 🙏 แอดมินจะรีบตอบกลับเร็วๆ นี้ค่ะ"
+    }
+    await replyText(replyToken, `${adminContact}\n\n${followUp}`)
+    return true;
+  }
+
+  // All remaining keywords require an active session
+  if (!session) return false;
 
   if (t === KEYWORDS.STATUS) {
     console.log(`📋 Status requested${logCtx({ userId })}`);
@@ -54,9 +83,10 @@ export async function handleSpecialKeyword(
       const pricing = await getPricing(session.package_key);
       productName = pricing.name_th;
     } catch { /* pricing row missing — fall back to generic message */ }
+    const botName = await getSetting("bot_name")
     await replyText(
       replyToken,
-      `เริ่มต้นใหม่แล้วค่ะ ✨ ${BOT_NAME}พร้อมช่วย${productName ? `สร้าง${productName}` : "เหลือคุณ"}ใหม่เลยนะคะ`,
+      `เริ่มต้นใหม่แล้วค่ะ ✨ ${botName}พร้อมช่วย${productName ? `สร้าง${productName}` : "เหลือคุณ"}ใหม่เลยนะคะ`,
     );
     return true;
   }

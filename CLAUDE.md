@@ -51,7 +51,7 @@ supabase/
     _shared/
       types.ts             # TypeScript interfaces — DB tables, GPT responses, product-specific data types
       lineService.ts       # LINE reply/push/quickReply/paymentButtonMessage(text, url, priceAmount) helpers
-      configService.ts     # Loads prompts + pricing from DB (prompts cached by package_key:prompt_key), getAllPricing()
+      configService.ts     # Loads prompts + pricing + settings from DB; getPrompt(), getSetting(key), getAllPricing() — all cached at instance level
       checkoutService.ts   # Stripe checkout session creation (allow_promotion_codes: true)
       generationRouter.ts  # Maps package_key → Edge Function name, fire-and-forget invoker
       ai/
@@ -63,9 +63,10 @@ supabase/
         client.ts          # Supabase client factory
         userConsents.ts    # upsertConsent(lineUserId, accepted, displayName?)
         userSessions.ts    # getActiveSession, createSession(lineUserId, displayName, packageKey), updateSession, getSessionsForReminder, getGhostSessions
-        orders.ts          # createOrder, updateOrder, getStuckGeneratingOrders, getAbandonedPaidOrders, getUndeliveredOrders
+        orders.ts          # createOrder({lineUserId,sessionId,orderNo,packageKey}), updateOrder, getStuckGeneratingOrders, getAbandonedPaidOrders, getUndeliveredOrders
         pricing.ts         # getActivePricingByKey(packageKey), getAllActivePricing()
         prompts.ts         # getAllPrompts()
+        settings.ts        # getAllSettings() — key/value store (bot_name, admin_contact)
         storage.ts         # uploadImage → Supabase Storage
       products/
         index.ts           # ProductModule interface, getProduct(packageKey), getProductKeyByEntryKeyword(text, allPricing)
@@ -86,10 +87,10 @@ docs/                   # Planning documents (read-only reference)
 ### Core Flow
 1. LINE sends webhook → `line-webhook/index.ts`
 2. Check `user_consents` (PDPA) → if not accepted, send consent message + save `display_name` (consent acceptance does NOT create a session)
-3. If no active session → load `getAllPricing()` → match text against `entry_keywords` → create session with matched `package_key`
+3. Check special keywords (`สถานะ`, `เริ่มใหม่`, `ช่วยด้วย`, `ติดต่อแอดมิน`, etc.) — `ติดต่อแอดมิน` works with or without a session; all others require an active session
+4. If no active session → load `getAllPricing()` → match text against `entry_keywords` → create session with matched `package_key`
    - If no match + single product → auto-select
    - If no match + multiple products → show quick-reply menu (flat list of all `entry_keywords` across all products)
-4. Check special keywords (`สถานะ`, `เริ่มใหม่`, `ช่วยด้วย`, etc.) → handle immediately
 5. If `status = 'awaiting_payment'` → reply with payment reminder + refresh link if expired
 6. Send message + last 20 conversation history to gpt-5.4-mini with `bot_personality` prompt
 7. GPT returns `{ message, extracted, is_complete, is_off_topic }` as JSON
@@ -133,6 +134,7 @@ docs/                   # Planning documents (read-only reference)
 | `orders` | Payment + generation lifecycle — `generated_content` JSONB, `image_url`, `package_key`, `promotion_code`, `discount_amount`, status: pending→paid→generating→done\|failed |
 | `prompts` | AI prompt templates — scoped by `package_key` (`shared` or `wallpaper`), unique on `(package_key, prompt_key)` |
 | `pricing` | Package config per `package_key` — stripe_price_id, name_th, entry_keywords (text[]) |
+| `settings` | App-level key/value config — `bot_name`, `admin_contact`; editable from DB without redeploy |
 
 ### Multi-product Design
 - `_shared/products/index.ts` — `ProductModule` interface + `getProduct(packageKey)` registry + `getProductKeyByEntryKeyword(text, allPricing)`
@@ -192,6 +194,12 @@ IMAGE_QUALITY=medium         # low | medium | high
 ```
 
 `.env.dev`, `.env.prod` are gitignored. Only `.env.example` is committed.
+
+## Coding Conventions
+
+- **Functions with more than 3 parameters must use an object argument** instead of positional args. Example: `createOrder({ lineUserId, sessionId, orderNo, packageKey })` not `createOrder(lineUserId, sessionId, orderNo, packageKey)`
+- `BOT_NAME` is NOT a constant — fetch via `getSetting("bot_name")` from `configService.ts` (cached)
+- `admin_contact` message is stored in `settings` table — edit from DB, no redeploy needed
 
 ## Migration Conventions
 

@@ -1,10 +1,12 @@
 import { getAllPrompts } from "./db/prompts.ts"
 import { getActivePricingByKey, getAllActivePricing } from "./db/pricing.ts"
+import { getAllSettings } from "./db/settings.ts"
 import type { Pricing, Prompt } from "./types.ts"
 
 // In-memory cache — lives for the lifetime of the Edge Function instance
 // Cache key: "{package_key}:{prompt_key}"
 let promptCache: Map<string, string> | null = null
+let settingsCache: Map<string, string> | null = null
 
 export async function getPrompt(packageKey: string, key: string): Promise<string> {
   if (!promptCache) {
@@ -32,7 +34,18 @@ export function fillPrompt(template: string, vars: Record<string, string | null 
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "")
 }
 
+export async function getSetting(key: string): Promise<string> {
+  if (!settingsCache) {
+    const rows = await getAllSettings()
+    settingsCache = new Map(rows.map((s) => [s.key, s.value]))
+  }
+  const value = settingsCache.get(key)
+  if (value === undefined) throw new Error(`Setting not found: ${key}`)
+  return value
+}
+
 /** Force-clear prompt cache (useful after prompt updates in DB) */
 export function clearCache(): void {
   promptCache = null
+  settingsCache = null
 }

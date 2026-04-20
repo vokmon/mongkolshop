@@ -1,10 +1,9 @@
 import { getUserProfile, markAsRead, quickReply, quickReplyItem, replyMessages, replyText } from "../../_shared/lineService.ts"
 import { getConsent } from "../../_shared/db/userConsents.ts"
 import { createSession, getActiveSession } from "../../_shared/db/userSessions.ts"
-import { getAllPricing, getPricing } from "../../_shared/configService.ts"
+import { getAllPricing, getPricing, getSetting } from "../../_shared/configService.ts"
 import { getProductKeyByEntryKeyword } from "../../_shared/products/index.ts"
 import { logCtx } from "../../_shared/logger.ts"
-import { BOT_NAME } from "../../_shared/constants.ts"
 import { handleConsentFlow } from "./consent.ts"
 import { handleSpecialKeyword } from "./keywords.ts"
 import { handleAwaitingPayment, handleChat } from "./chat.ts"
@@ -24,6 +23,10 @@ export async function handleMessage(userId: string, replyToken: string, text: st
   }
 
   let session = await getActiveSession(userId)
+
+  // Check special keywords before session creation — ADMIN works without a session
+  if (await handleSpecialKeyword({ userId, replyToken, text, session })) return
+
   if (!session) {
     const allPricing = await getAllPricing()
     if (allPricing.length === 0) {
@@ -49,16 +52,15 @@ export async function handleMessage(userId: string, replyToken: string, text: st
       const items = allPricing.flatMap((p) =>
         p.entry_keywords.map((kw) => quickReplyItem(kw, kw))
       )
+      const botName = await getSetting("bot_name")
       await replyMessages(replyToken, [
-        quickReply(`สวัสดีค่ะ ${BOT_NAME}มีบริการดังนี้ค่ะ เลือกได้เลยนะคะ 😊`, items),
+        quickReply(`สวัสดีค่ะ ${botName}มีบริการดังนี้ค่ะ เลือกได้เลยนะคะ 😊`, items),
       ])
       return
     }
   } else {
     console.log(`📋 Active session found${logCtx({ userId, name, sessionId: session.id })} status:${session.status}`)
   }
-
-  if (await handleSpecialKeyword(userId, replyToken, text, session)) return
 
   if (session.status === "awaiting_payment") {
     console.log(`💳 Session awaiting payment — showing reminder${logCtx({ userId, name, orderNo: session.current_order_no })}`)

@@ -1,10 +1,9 @@
 import Stripe from "npm:stripe";
-import { getPricing } from "../../_shared/configService.ts";
+import { getPricing, getSetting } from "../../_shared/configService.ts";
 import { getOrderByOrderNo, updateOrder } from "../../_shared/db/orders.ts";
 import { invokeGenerationJob } from "../../_shared/generationRouter.ts";
 import { pushText } from "../../_shared/lineService.ts";
 import { logCtx } from "../../_shared/logger.ts";
-import { BOT_NAME } from "../../_shared/constants.ts";
 
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!);
 
@@ -76,10 +75,13 @@ export async function handleCheckoutCompleted(
 
   console.log(`✅ Order marked as paid — invoking generation${logCtx({ userId: lineUserId, orderNo })}`);
 
-  const pricing = await getPricing(order.package_key);
+  const [pricing, botName] = await Promise.all([
+    getPricing(order.package_key),
+    getSetting("bot_name"),
+  ])
   await pushText(
     lineUserId,
-    `ได้รับการชำระเงินแล้วค่ะ ✅ 💳 ${BOT_NAME}กำลังสร้าง${pricing.name_th}สำหรับคุณอยู่นะคะ ✨ รอสักครู่นะคะ 🙏`,
+    `ได้รับการชำระเงินแล้วค่ะ ✅ 💳 ${botName}กำลังสร้าง${pricing.name_th}สำหรับคุณอยู่นะคะ ✨ รอสักครู่นะคะ 🙏`,
   );
 
   // Fire-and-forget — do not await, return 200 to Stripe immediately

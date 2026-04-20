@@ -1,12 +1,17 @@
 import { getClient } from "./client.ts"
 import type { Order } from "../types.ts"
 
-export async function createOrder(
-  lineUserId: string,
-  sessionId: number,
-  orderNo: string,
-  packageKey: string,
-): Promise<Order> {
+export async function createOrder({
+  lineUserId,
+  sessionId,
+  orderNo,
+  packageKey,
+}: {
+  lineUserId: string
+  sessionId: number
+  orderNo: string
+  packageKey: string
+}): Promise<Order> {
   const { data, error } = await getClient()
     .from("orders")
     .insert({ order_no: orderNo, line_user_id: lineUserId, session_id: sessionId, package_key: packageKey })
