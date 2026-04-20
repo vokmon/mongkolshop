@@ -50,7 +50,7 @@ export interface UserSession {
 
 export type SessionStatus = "collecting" | "awaiting_payment" | "done"
 
-export type OrderStatus = "pending" | "paid" | "generating" | "done" | "failed"
+export type OrderStatus = "pending" | "paid" | "generating" | "done" | "failed" | "cancelled"
 
 export interface Order {
   id: number

@@ -11,7 +11,9 @@ import {
   quickReplyItem,
   replyMessages,
   replyText,
-} from "../../_shared/lineService.ts";
+  withQuickReply,
+} from "../../_shared/lineService.ts"
+import { KEYWORDS } from "../../_shared/constants.ts";
 import {
   deactivateSession,
   generateOrderNo,
@@ -25,7 +27,6 @@ import {
 } from "../lib/guided.ts";
 import { getProduct } from "../../_shared/products/index.ts";
 import { logCtx } from "../../_shared/logger.ts";
-import { KEYWORDS } from "../../_shared/constants.ts";
 import type { ChatMessage, UserSession } from "../../_shared/types.ts";
 
 const MAX_CONVERSATION_HISTORY = 40;
@@ -59,9 +60,23 @@ export async function handleAwaitingPayment(
     getPriceAmount(pricing.stripe_price_id),
   ])
   const botName = await getSetting("bot_name")
+  const paymentCard = paymentButtonMessage(
+    `รอการชำระเงินอยู่นะคะ 🙏 กรุณาชำระ ${priceAmount} บาท เพื่อดำเนินการสร้าง${pricing.name_th}ของคุณได้เลยค่ะ ✨`,
+    checkoutUrl,
+    priceAmount,
+  )
+
+  // Show cancel/restart quick replies only while order is still pending (not yet paid)
+  const card = order.status === "pending"
+    ? withQuickReply(paymentCard, [
+        quickReplyItem(`🔄 ${KEYWORDS.RESTART}`, KEYWORDS.RESTART),
+        quickReplyItem(`❌ ${KEYWORDS.CANCEL}`, KEYWORDS.CANCEL),
+      ])
+    : paymentCard
+
   await replyMessages(replyToken, [
     { type: "text", text: `${botName}ยังรอการชำระเงินอยู่นะคะ 🙏 เมื่อชำระเรียบร้อยแล้ว ${botName}จะดำเนินการทันทีเลยค่ะ ✨` },
-    paymentButtonMessage(`รอการชำระเงินอยู่นะคะ 🙏 กรุณาชำระ ${priceAmount} บาท เพื่อดำเนินการสร้าง${pricing.name_th}ของคุณได้เลยค่ะ ✨`, checkoutUrl, priceAmount),
+    card,
   ])
 }
 

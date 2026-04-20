@@ -5,6 +5,20 @@ import type { Order } from "../../_shared/types.ts"
 
 export { createCheckoutSession, getPriceAmount }
 
+/**
+ * Expires a Stripe checkout session so the payment link becomes invalid.
+ * Safe to call even if the session is already expired — Stripe ignores it.
+ */
+export async function cancelCheckoutSession(stripeSessionId: string): Promise<void> {
+  try {
+    await stripe.checkout.sessions.expire(stripeSessionId)
+  } catch (err: unknown) {
+    // Ignore "already expired" errors — session is already invalid, goal achieved
+    const msg = err instanceof Error ? err.message : String(err)
+    if (!msg.includes("already expired") && !msg.includes("cannot be expired")) throw err
+  }
+}
+
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!)
 
 /**

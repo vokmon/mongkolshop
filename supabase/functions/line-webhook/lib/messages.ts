@@ -4,17 +4,23 @@ import { quickReplyItem } from "../../_shared/lineService.ts"
 import { KEYWORDS } from "../../_shared/constants.ts"
 
 export function buildStatusMessage(session: UserSession): string {
-  const label =
-    session.status === "awaiting_payment" ? "รอการชำระเงิน 💳" :
-    session.status === "done"             ? "เสร็จสิ้น ✅" :
-                                            "กำลังเก็บข้อมูล 📝"
-  return `สถานะของคุณ: ${label}\nOrder: ${session.current_order_no ?? "-"}`
+  return getProduct(session.package_key).buildStatusMessage(session)
+}
+
+export function buildHelpMessage(): string {
+  return "มีอะไรให้ช่วยไหมคะ? 😊 กดเลือกได้เลยนะคะ\n\n" +
+    `📋 ${KEYWORDS.STATUS} — ดูสถานะการสั่งซื้อ\n` +
+    `🔄 ${KEYWORDS.RESTART} — เริ่มต้นใหม่\n` +
+    `❌ ${KEYWORDS.CANCEL} — ยกเลิกคำสั่ง\n` +
+    `👤 ${KEYWORDS.VIEW_DATA} — ดูข้อมูลที่เก็บไว้\n` +
+    `📞 ${KEYWORDS.ADMIN} — ติดต่อแอดมิน`
 }
 
 export function buildHelpQuickReply() {
   return [
     quickReplyItem(`📋 ${KEYWORDS.STATUS}`, KEYWORDS.STATUS),
     quickReplyItem(`🔄 ${KEYWORDS.RESTART}`, KEYWORDS.RESTART),
+    quickReplyItem(`❌ ${KEYWORDS.CANCEL}`, KEYWORDS.CANCEL),
     quickReplyItem(`👤 ${KEYWORDS.VIEW_DATA}`, KEYWORDS.VIEW_DATA),
     quickReplyItem(`🗑️ ${KEYWORDS.DELETE_DATA}`, KEYWORDS.DELETE_DATA),
     quickReplyItem(`📞 ${KEYWORDS.ADMIN}`, KEYWORDS.ADMIN),

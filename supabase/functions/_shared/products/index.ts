@@ -4,6 +4,7 @@ import wallpaper from "./wallpaper.ts"
 export interface ProductModule {
   sessionToCollectedData(session: UserSession): Record<string, unknown>
   getMissingFields(data: Record<string, unknown>): string[]
+  buildStatusMessage(session: UserSession): string
   buildMyDataMessage(session: UserSession): string
   formatCollectedData(data: Record<string, unknown>): string
   fieldToThai(field: string): string

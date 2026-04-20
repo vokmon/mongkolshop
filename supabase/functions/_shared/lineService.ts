@@ -133,6 +133,11 @@ export function quickReplyItem(label: string, text: string): QuickReplyItem {
   }
 }
 
+/** Attaches quick reply buttons to any message type. */
+export function withQuickReply(message: LineMessage, items: QuickReplyItem[]): LineMessage {
+  return { ...message, quickReply: { items } }
+}
+
 
 // ============================================================
 // Mark as read

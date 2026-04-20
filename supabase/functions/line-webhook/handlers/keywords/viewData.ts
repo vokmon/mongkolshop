@@ -3,20 +3,23 @@ import { logCtx } from "../../../_shared/logger.ts"
 import { KEYWORDS } from "../../../_shared/constants.ts"
 import { buildMyDataMessage } from "../../lib/messages.ts"
 import type { HandlerContext, KeywordHandler } from "./types.ts"
-import type { UserSession } from "../../../_shared/types.ts"
 
 /**
  * Handles `ดูข้อมูลฉัน` — shows the user's currently collected data for the active session.
- * Requires an active session.
+ * Works with or without an active session — replies gracefully when nothing is active.
  */
 class ViewDataHandler implements KeywordHandler {
-  matches(text: string, session: UserSession | null): boolean {
-    return session !== null && text === KEYWORDS.VIEW_DATA
+  matches(text: string): boolean {
+    return text === KEYWORDS.VIEW_DATA
   }
 
   async handle({ userId, replyToken, session }: HandlerContext): Promise<void> {
     console.log(`👤 View data requested${logCtx({ userId })}`)
-    await replyText(replyToken, buildMyDataMessage(session!))
+    if (!session) {
+      await replyText(replyToken, `ยังไม่มีข้อมูลที่บันทึกไว้นะคะ 😊 เลือกบริการจากเมนูได้เลยค่ะ`)
+      return
+    }
+    await replyText(replyToken, buildMyDataMessage(session))
   }
 }
 

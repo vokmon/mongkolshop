@@ -66,6 +66,14 @@ const wallpaper: ProductModule = {
     return missing
   },
 
+  buildStatusMessage(session: UserSession): string {
+    const label =
+      session.status === "awaiting_payment" ? "รอการชำระเงิน 💳" :
+      session.status === "done"             ? "เสร็จสิ้น ✅" :
+                                              "กำลังเก็บข้อมูล 📝"
+    return `สถานะวอลเปเปอร์มงคลของคุณ: ${label}\nOrder: ${session.current_order_no ?? "-"}`
+  },
+
   buildMyDataMessage(session: UserSession): string {
     const d = session.collected_data as Partial<WallpaperCollectedData>
     const boolLabel = (v: boolean | null | undefined) =>
@@ -97,7 +105,7 @@ const wallpaper: ProductModule = {
     const botName = await getSetting("bot_name")
     const missingText = missing.map(fieldToThai).join(", ")
     if (count >= maxReminders - 1) {
-      return `นี่คือการแจ้งเตือนครั้งสุดท้ายนะคะ 🙏 ถ้าไม่ตอบกลับ ${botName}จะปิดรายการนี้ไว้ก่อนนะคะ ยังขาด ${missingText} ค่ะ`
+      return `หวังว่าจะได้คุยกันอีกครั้งนะคะ 🙏 ถ้ายังสนใจอยู่ ทักมาได้เลยนะคะ ยังขาดข้อมูล ${missingText} อยู่เลยค่ะ ✨`
     }
     return REMINDER_TEMPLATES[count % REMINDER_TEMPLATES.length](missingText, productName, botName)
   },

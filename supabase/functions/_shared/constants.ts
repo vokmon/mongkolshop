@@ -7,4 +7,5 @@ export const KEYWORDS = {
   CONSENT_ACCEPT: "ยอมรับข้อตกลง",
   CONSENT_REJECT: "ไม่ยอมรับข้อตกลง",
   ADMIN: "ติดต่อแอดมิน",
+  CANCEL: "ยกเลิก",
 };

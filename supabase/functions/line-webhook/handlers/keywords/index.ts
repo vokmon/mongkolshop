@@ -2,6 +2,7 @@ import type { HandlerContext, KeywordHandler } from "./types.ts"
 import adminHandler from "./admin.ts"
 import statusHandler from "./status.ts"
 import restartHandler from "./restart.ts"
+import cancelHandler from "./cancel.ts"
 import helpHandler from "./help.ts"
 import viewDataHandler from "./viewData.ts"
 import deleteDataHandler from "./deleteData.ts"
@@ -12,6 +13,7 @@ const handlers: KeywordHandler[] = [
   adminHandler,
   statusHandler,
   restartHandler,
+  cancelHandler,
   helpHandler,
   viewDataHandler,
   deleteDataHandler,
