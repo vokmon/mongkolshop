@@ -139,7 +139,7 @@ docs/                   # Planning documents (read-only reference)
 ### Multi-product Design
 - `_shared/products/index.ts` — `ProductModule` interface + `getProduct(packageKey)` registry + `getProductKeyByEntryKeyword(text, allPricing)`
 - `_shared/products/wallpaper.ts` — implements `ProductModule` as a default export (explicit object, not loose functions)
-- `ProductModule` methods: `sessionToCollectedData`, `getMissingFields`, `buildMyDataMessage`, `formatCollectedData`, `fieldToThai`, `buildReminderMessage`, `buildSessionEndMessage`, `getFieldLabels`, `extractedToCollected`, `buildDeliveryText`, `buildGenerationFailedMessage`, `deliver(lineUserId, order)`
+- `ProductModule` methods: `sessionToCollectedData`, `getMissingFields`, `buildStatusMessage`, `buildMyDataMessage`, `formatCollectedData`, `fieldToThai`, `buildReminderMessage`, `buildSessionEndMessage`, `getFieldLabels`, `extractedToCollected`, `buildDeliveryText`, `buildGenerationFailedMessage`, `deliver(lineUserId, order)`
 - `user_sessions.collected_data` — JSONB, cast to product-specific type inside product module
 - `orders.generated_content` — JSONB, cast to product-specific type inside product module
 - `user_sessions.package_key` + `orders.package_key` — determines which product module, function, pricing, and prompts to use
