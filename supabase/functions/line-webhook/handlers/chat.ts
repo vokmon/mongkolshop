@@ -124,12 +124,12 @@ export async function handleChat(
   // Off-topic tracking
   if (botResponse.is_off_topic) {
     patch.off_topic_count = session.off_topic_count + 1;
-    if (patch.off_topic_count >= 5) patch.chat_mode = "guided";
+    if (patch.off_topic_count >= 9) patch.chat_mode = "guided";
   }
 
   const currentOffTopicCount = patch.off_topic_count ?? session.off_topic_count;
   if (botResponse.is_off_topic) {
-    console.log(`🚨 Off-topic detected${logCtx({ userId })} count:${currentOffTopicCount}${currentOffTopicCount >= 5 ? " — guided mode" : ""}`)
+    console.log(`🚨 Off-topic detected${logCtx({ userId })} count:${currentOffTopicCount}${currentOffTopicCount >= 9 ? " — guided mode" : ""}`)
   }
   if (currentOffTopicCount >= 10) {
     console.log(`🛑 Off-topic limit reached — deactivating session${logCtx({ userId })}`)

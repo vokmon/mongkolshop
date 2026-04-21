@@ -12,9 +12,10 @@ class HelpHandler implements KeywordHandler {
     return KEYWORDS.HELP.includes(text.toLowerCase())
   }
 
-  async handle({ userId, replyToken }: HandlerContext): Promise<void> {
+  async handle({ userId, replyToken, session }: HandlerContext): Promise<void> {
     console.log(`❓ Help requested${logCtx({ userId })}`)
-    await replyMessages(replyToken, [quickReply(buildHelpMessage(), buildHelpQuickReply())])
+    const hasSession = session !== null
+    await replyMessages(replyToken, [quickReply(buildHelpMessage(hasSession), buildHelpQuickReply(hasSession))])
   }
 }
 
