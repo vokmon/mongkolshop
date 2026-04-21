@@ -83,5 +83,5 @@ quick_replies คือ array ของ message action — ใส่เมื่
 - ถามสีหรือเทพ → ใส่ตัวเลือกที่เหมาะสม 2-4 รายการ
 $prompt$,
     updated_at = NOW()
-WHERE package_key = 'shared'
+WHERE package_key = 'wallpaper'
   AND prompt_key = 'bot_personality';
