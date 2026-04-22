@@ -9,15 +9,15 @@ export function buildStatusMessage(session: UserSession): string {
 
 export function buildHelpMessage(hasSession: boolean): string {
   const sessionLines = hasSession
-    ? `📋 ${KEYWORDS.STATUS} — ดูสถานะการสั่งซื้อ\n` +
-      `🔄 ${KEYWORDS.RESTART} — เริ่มต้นใหม่\n` +
-      `❌ ${KEYWORDS.CANCEL} — ยกเลิกคำสั่ง\n`
+    ? `📋 ${KEYWORDS.STATUS} — ดูว่าคำสั่งซื้อไปถึงไหนแล้ว\n` +
+      `🔄 ${KEYWORDS.RESTART} — ล้างข้อมูลและเริ่มต้นใหม่\n` +
+      `❌ ${KEYWORDS.CANCEL} — ยกเลิกคำสั่งซื้อที่ค้างอยู่\n`
     : ""
   return "มีอะไรให้ช่วยไหมคะ? 😊 กดเลือกได้เลยนะคะ\n\n" +
     sessionLines +
-    `👤 ${KEYWORDS.VIEW_DATA} — ดูข้อมูลที่เก็บไว้\n` +
-    `🗑️ ${KEYWORDS.DELETE_DATA} — ลบข้อมูลของฉัน\n` +
-    `📞 ${KEYWORDS.ADMIN} — ติดต่อแอดมิน`
+    `👤 ${KEYWORDS.VIEW_DATA} — ข้อมูลที่น้องบันทึกไว้\n` +
+    `🗑️ ${KEYWORDS.DELETE_DATA} — ลบข้อมูลส่วนตัวทั้งหมด\n` +
+    `📞 ${KEYWORDS.ADMIN} — ให้ทีมงานช่วยโดยตรง`
 }
 
 export function buildHelpQuickReply(hasSession: boolean) {
