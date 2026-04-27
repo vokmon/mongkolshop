@@ -1,12 +1,14 @@
 import { getAllPrompts } from "./db/prompts.ts"
 import { getActivePricingByKey, getAllActivePricing } from "./db/pricing.ts"
 import { getAllSettings } from "./db/settings.ts"
+import { getPriceAmount as fetchPriceFromStripe } from "./checkoutService.ts"
 import type { Pricing, Prompt } from "./types.ts"
 
 // In-memory cache — lives for the lifetime of the Edge Function instance
 // Cache key: "{package_key}:{prompt_key}"
 let promptCache: Map<string, string> | null = null
 let settingsCache: Map<string, string> | null = null
+let priceCache: Map<string, number> | null = null
 
 export async function getPrompt(packageKey: string, key: string): Promise<string> {
   if (!promptCache) {
@@ -29,6 +31,16 @@ export async function getAllPricing(): Promise<Pricing[]> {
   return getAllActivePricing()
 }
 
+export async function getPriceAmount(packageKey: string): Promise<number> {
+  if (!priceCache) priceCache = new Map()
+  if (priceCache.has(packageKey)) return priceCache.get(packageKey)!
+  const pricing = await getPricing(packageKey)
+  if (!pricing.stripe_price_id) throw new Error(`No stripe_price_id for package: ${packageKey}`)
+  const amount = await fetchPriceFromStripe(pricing.stripe_price_id)
+  priceCache.set(packageKey, amount)
+  return amount
+}
+
 /** Fill {{placeholder}} variables in a prompt template */
 export function fillPrompt(template: string, vars: Record<string, string | null | undefined>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "")
@@ -48,4 +60,5 @@ export async function getSetting(key: string): Promise<string> {
 export function clearCache(): void {
   promptCache = null
   settingsCache = null
+  priceCache = null
 }

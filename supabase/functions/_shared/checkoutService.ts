@@ -17,7 +17,7 @@ export async function createCheckoutSession(
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     line_items: [{ price: stripePriceId, quantity: 1 }],
-    payment_method_types: ["card", "promptpay"],
+    payment_method_types: ["promptpay"],
     allow_promotion_codes: true,
     metadata: { order_no: orderNo, line_user_id: lineUserId },
     success_url: lineOaUrl,

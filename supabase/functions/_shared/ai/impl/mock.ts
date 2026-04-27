@@ -1,5 +1,10 @@
-import type { BotResponse, ChatMessage, DeityRecommendation, GeneratedContent } from "../../types.ts"
-import type { IAiService } from "../aiService.ts"
+import type {
+  BotResponse,
+  ChatMessage,
+  DeityRecommendation,
+  GeneratedContent,
+} from "../../types.ts";
+import type { IAiService } from "../aiService.ts";
 
 const FIELD_LABELS: Record<string, string> = {
   full_name: "ชื่อจริง",
@@ -9,14 +14,17 @@ const FIELD_LABELS: Record<string, string> = {
   color: "สีที่ชอบ",
   include_lucky_number: "ต้องการใส่เลขมงคลในรูปไหมคะ (ใช่/ไม่ใส่)",
   include_name: "ต้องการให้ใส่ชื่อในรูปไหมคะ (ใช่/ไม่ใส่)",
-}
+};
 
 export class MockAIService implements IAiService {
   /** Parse missing fields list from the filled bot_personality system prompt */
   private getMissingFields(systemPrompt: string): string[] {
-    const match = systemPrompt.match(/== ข้อมูลที่ยังขาด ==\n(.+)/)
-    if (!match || !match[1].trim()) return []
-    return match[1].split(", ").map((f) => f.trim()).filter(Boolean)
+    const match = systemPrompt.match(/== ข้อมูลที่ยังขาด ==\n(.+)/);
+    if (!match || !match[1].trim()) return [];
+    return match[1]
+      .split(", ")
+      .map((f) => f.trim())
+      .filter(Boolean);
   }
 
   async chatWithBot(
@@ -24,16 +32,17 @@ export class MockAIService implements IAiService {
     history: ChatMessage[],
     userMessage: string,
   ): Promise<BotResponse> {
-    const missing = this.getMissingFields(systemPrompt)
+    const missing = this.getMissingFields(systemPrompt);
 
     // All fields already collected — confirm and complete
     if (missing.length === 0) {
       return {
-        message: "[MOCK] ✨ ได้รับข้อมูลครบแล้วค่ะ ขอยืนยันข้อมูลของคุณด้วยนะคะ",
+        message:
+          "[MOCK] ✨ ได้รับข้อมูลครบแล้วค่ะ ขอยืนยันข้อมูลของคุณด้วยนะคะ",
         extracted: {},
         is_complete: true,
         is_off_topic: false,
-      }
+      };
     }
 
     // First message — greet and ask for first field, don't extract yet
@@ -43,38 +52,43 @@ export class MockAIService implements IAiService {
         extracted: {},
         is_complete: false,
         is_off_topic: false,
-      }
+      };
     }
 
     // Extract the first missing field from the user's message
-    const field = missing[0]
-    const isLastField = missing.length === 1
-    const nextField = missing[1]
+    const field = missing[0];
+    const isLastField = missing.length === 1;
+    const nextField = missing[1];
 
-    const extracted: BotResponse["extracted"] = {}
-    if (field === "full_name") extracted.full_name = userMessage
-    else if (field === "birthdate") extracted.birthdate = userMessage
-    else if (field === "wish") extracted.wish = userMessage
-    else if (field === "deity") extracted.deity = userMessage
-    else if (field === "color") extracted.color = userMessage
-    else if (field === "include_lucky_number") extracted.include_lucky_number = true
-    else if (field === "include_name") extracted.include_name = true
+    const extracted: BotResponse["extracted"] = {};
+    if (field === "full_name") extracted.full_name = userMessage;
+    else if (field === "birthdate") extracted.birthdate = userMessage;
+    else if (field === "wish") extracted.wish = userMessage;
+    else if (field === "deity") extracted.deity = userMessage;
+    else if (field === "color") extracted.color = userMessage;
+    else if (field === "include_lucky_number")
+      extracted.include_lucky_number = true;
+    else if (field === "include_name") extracted.include_name = true;
 
     const message = isLastField
       ? `[MOCK] ✨ ขอบคุณค่ะ ได้รับข้อมูลครบแล้ว! กำลังสรุปให้นะคะ`
-      : `[MOCK] ขอบคุณค่ะ 😊 ขอทราบ${FIELD_LABELS[nextField]}ของคุณด้วยนะคะ`
+      : `[MOCK] ขอบคุณค่ะ 😊 ขอทราบ${FIELD_LABELS[nextField]}ของคุณด้วยนะคะ`;
 
-    const quick_replies: BotResponse["quick_replies"] = isLastField ? [] : (() => {
-      if (nextField === "include_lucky_number") return [
-        { type: "message", label: "ใส่เลขมงคล 🔢", text: "ใช่" },
-        { type: "message", label: "ไม่ใส่", text: "ไม่ใส่" },
-      ]
-      if (nextField === "include_name") return [
-        { type: "message", label: "ใส่ชื่อในรูป 📛", text: "ใช่" },
-        { type: "message", label: "ไม่ใส่", text: "ไม่ใส่" },
-      ]
-      return []
-    })()
+    const quick_replies: BotResponse["quick_replies"] = isLastField
+      ? []
+      : (() => {
+          if (nextField === "include_lucky_number")
+            return [
+              { type: "message", label: "ใส่เลขมงคล 🔢", text: "ใช่" },
+              { type: "message", label: "ไม่ใส่", text: "ไม่ใส่" },
+            ];
+          if (nextField === "include_name")
+            return [
+              { type: "message", label: "ใส่ชื่อในรูป 📛", text: "ใช่" },
+              { type: "message", label: "ไม่ใส่", text: "ไม่ใส่" },
+            ];
+          return [];
+        })();
 
     return {
       message,
@@ -82,25 +96,27 @@ export class MockAIService implements IAiService {
       quick_replies,
       is_complete: isLastField,
       is_off_topic: false,
-    }
+    };
   }
 
   async generateContent(_filledPrompt: string): Promise<GeneratedContent> {
     return {
-      fortune_text: "[MOCK] ดวงชะตาของคุณสุกสว่างเหมือนทอง การงานและการเงินจะก้าวหน้าอย่างมั่นคงค่ะ",
-      mantra: "[MOCK] โอม คัม คณปตะเย นะมะฮา",
-      mantra_meaning: "[MOCK] ข้าพเจ้าน้อมบูชาพระพิฆเนศ ผู้ขจัดอุปสรรคทั้งปวง",
-      worship_guide: "[MOCK] สวดคาถา 9 จบ ทุกเช้าวันพุธ จุดธูป 3 ดอก และดอกดาวเรือง",
-      lucky_colors: "[MOCK] ทอง เหลือง เขียว",
-      lucky_number: "459",
-    }
+      fortune_text:
+        "[MOCK] ดวงชะตาของคุณสุกสว่างเหมือนทอง การงานและการเงินจะก้าวหน้าอย่างมั่นคงค่ะ", // คำทำนายและคำอวยพรเฉพาะบุคคล 3-4 ประโยค เป็นภาษาไทย
+      mantra: "[MOCK] โอม คัม คณปตะเย นะมะฮา", // คาถาบูชาสำหรับเทพองค์นี้ เขียนเป็นภาษาไทย (ถอดเสียงให้อ่านออกเสียงได้) เพื่อให้ผู้บูชาอ่านได้
+      mantra_meaning: "[MOCK] ข้าพเจ้าน้อมบูชาพระพิฆเนศ ผู้ขจัดอุปสรรคทั้งปวง", // ความหมายของคาถาเป็นภาษาไทย
+      worship_guide:
+        "[MOCK] สวดคาถา 9 จบ ทุกเช้าวันพุธ จุดธูป 3 ดอก และดอกดาวเรือง", // วิธีสวดและเวลาที่เหมาะสมในการบูชาเทพองค์นี้ เป็นภาษาไทย
+      lucky_colors: "[MOCK] ทอง เหลือง เขียว", // สีมงคลนำโชคของคุณ
+      lucky_number: "459", // เลขนำโชคของคุณ
+    };
   }
 
   async recommendDeity(_filledPrompt: string): Promise<DeityRecommendation> {
     return {
       deity: "พระพิฆเนศ",
       reason: "[MOCK] เหมาะกับผู้ที่ต้องการความสำเร็จและขจัดอุปสรรคในชีวิต",
-    }
+    };
   }
 
   async createImage(_prompt: string): Promise<Uint8Array> {
@@ -112,7 +128,7 @@ export class MockAIService implements IAiService {
       0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x00, 0x01, 0x00, 0x00,
       0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
       0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-    ])
-    return PNG_1X1
+    ]);
+    return PNG_1X1;
   }
 }

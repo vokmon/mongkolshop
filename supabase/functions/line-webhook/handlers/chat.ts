@@ -2,6 +2,7 @@ import { MockAIService } from "../../_shared/ai/impl/mock.ts";
 import {
   fillPrompt,
   getPrompt,
+  getPriceAmount,
   getPricing,
   getSetting,
 } from "../../_shared/configService.ts";
@@ -91,10 +92,17 @@ export async function handleChat(
   const missing = product.getMissingFields(collected);
   console.log(`🤖 Calling AI — missing fields: [${missing.join(", ") || "none"}]${logCtx({ userId, sessionId: session.id })}`)
 
-  const systemPrompt = fillPrompt(await getPrompt(session.package_key, "bot_personality"), {
+  const [botPersonality, price, adminContact] = await Promise.all([
+    getPrompt(session.package_key, "bot_personality"),
+    getPriceAmount(session.package_key),
+    getSetting("admin_contact"),
+  ])
+  const systemPrompt = fillPrompt(botPersonality, {
     off_topic_count: String(session.off_topic_count),
     current_data: getProduct(session.package_key).formatCollectedData(collected),
     missing_fields: missing.join(", "),
+    price: String(price),
+    admin_contact: adminContact,
   });
 
   const history = (session.conversation_history as ChatMessage[]).slice(-20);
