@@ -1,6 +1,6 @@
 import { getUserProfile, markAsRead, quickReply, quickReplyItem, replyMessages, replyText } from "../../_shared/lineService.ts"
 import { getConsent } from "../../_shared/db/userConsents.ts"
-import { createSession, getActiveSession } from "../../_shared/db/userSessions.ts"
+import { createSession, getActiveSession, getLastCompletedSession, updateSession } from "../../_shared/db/userSessions.ts"
 import { getAllPricing, getPricing, getSetting } from "../../_shared/configService.ts"
 import { getProductKeyByEntryKeyword } from "../../_shared/products/index.ts"
 import { logCtx } from "../../_shared/logger.ts"
@@ -40,12 +40,14 @@ export async function handleMessage(userId: string, replyToken: string, text: st
       console.log(`🆕 Entry keyword matched — creating session${logCtx({ userId, name })} package:${packageKey}`)
       const profile = await getUserProfile(userId)
       session = await createSession(userId, profile?.displayName ?? null, packageKey)
+      session = await prefillFromLastSession(userId, session)
     } else if (allPricing.length === 1) {
       // Only one product — auto-select and continue normally
       const singleKey = allPricing[0].package_key
       console.log(`🆕 Single product — auto-selecting${logCtx({ userId, name })} package:${singleKey}`)
       const profile = await getUserProfile(userId)
       session = await createSession(userId, profile?.displayName ?? null, singleKey)
+      session = await prefillFromLastSession(userId, session)
     } else {
       // Multiple products — show flat list of all keywords as quick replies
       console.log(`🆕 No active session — showing product selection${logCtx({ userId, name })}`)
@@ -76,5 +78,15 @@ export async function handleMessage(userId: string, replyToken: string, text: st
   }
 
   await handleChat(userId, replyToken, text, session)
+}
+
+async function prefillFromLastSession(userId: string, session: import("../../_shared/types.ts").UserSession): Promise<import("../../_shared/types.ts").UserSession> {
+  const last = await getLastCompletedSession(userId)
+  if (!last?.collected_data) return session
+  const { full_name, birthdate } = last.collected_data as { full_name?: string; birthdate?: string }
+  if (!full_name || !birthdate) return session
+  console.log(`🔄 Prefilling full_name + birthdate from last completed session${logCtx({ userId })}`)
+  await updateSession(session.id, { collected_data: { full_name, birthdate } })
+  return { ...session, collected_data: { full_name, birthdate } }
 }
 

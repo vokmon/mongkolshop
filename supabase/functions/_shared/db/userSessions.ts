@@ -136,6 +136,19 @@ export async function getSessionsForReminder(
   return data ?? [];
 }
 
+export async function getLastCompletedSession(lineUserId: string): Promise<UserSession | null> {
+  const { data } = await getClient()
+    .from("user_sessions")
+    .select("*")
+    .eq("line_user_id", lineUserId)
+    .eq("is_active", false)
+    .eq("status", "done")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data
+}
+
 // ============================================================
 // Helpers
 // ============================================================

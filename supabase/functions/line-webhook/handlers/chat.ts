@@ -2,7 +2,7 @@ import { MockAIService } from "../../_shared/ai/impl/mock.ts";
 import {
   fillPrompt,
   getPrompt,
-  getPriceAmount,
+  getPriceAmountByPackageKey,
   getPricing,
   getSetting,
 } from "../../_shared/configService.ts";
@@ -30,7 +30,7 @@ import { getProduct } from "../../_shared/products/index.ts";
 import { logCtx } from "../../_shared/logger.ts";
 import type { ChatMessage, UserSession } from "../../_shared/types.ts";
 
-const MAX_CONVERSATION_HISTORY = 40;
+
 const ai = new MockAIService();
 
 export async function handleAwaitingPayment(
@@ -94,18 +94,19 @@ export async function handleChat(
 
   const [botPersonality, price, adminContact] = await Promise.all([
     getPrompt(session.package_key, "bot_personality"),
-    getPriceAmount(session.package_key),
+    getPriceAmountByPackageKey(session.package_key),
     getSetting("admin_contact"),
   ])
+  const history = session.conversation_history as ChatMessage[];
+  const isPrefilled = history.length === 0 && !!collected.full_name && !!collected.birthdate
   const systemPrompt = fillPrompt(botPersonality, {
     off_topic_count: String(session.off_topic_count),
     current_data: getProduct(session.package_key).formatCollectedData(collected),
     missing_fields: missing.join(", "),
     price: String(price),
     admin_contact: adminContact,
+    is_prefilled: isPrefilled ? "true" : "false",
   });
-
-  const history = (session.conversation_history as ChatMessage[]).slice(-20);
 
   let botResponse: BotResponse;
   try {
@@ -150,12 +151,11 @@ export async function handleChat(
     return;
   }
 
-  // Update conversation history — keep last 40 messages in DB (20 sent to GPT)
   patch.conversation_history = [
-    ...history,
+    ...(session.conversation_history as ChatMessage[]),
     { role: "user", content: userMessage },
     { role: "assistant", content: botResponse.message },
-  ].slice(-MAX_CONVERSATION_HISTORY);
+  ];
 
   // Always save history + extracted fields before any branching
   await updateSession(session.id, patch);

@@ -31,7 +31,7 @@ export async function getAllPricing(): Promise<Pricing[]> {
   return getAllActivePricing()
 }
 
-export async function getPriceAmount(packageKey: string): Promise<number> {
+export async function getPriceAmountByPackageKey(packageKey: string): Promise<number> {
   if (!priceCache) priceCache = new Map()
   if (priceCache.has(packageKey)) return priceCache.get(packageKey)!
   const pricing = await getPricing(packageKey)
